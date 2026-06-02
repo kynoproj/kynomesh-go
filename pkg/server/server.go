@@ -78,6 +78,15 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 		return err
 	}
 
+	// Advertise to the broker only when colocated in the same pod; in
+	// local dev there is no broker reading this file.
+	if cfg.isUDS() {
+		if err := writeServerInfo(cfg); err != nil {
+			_ = ln.Close()
+			return err
+		}
+	}
+
 	// Plaintext HTTP/2 lets gRPC share the listener; the broker
 	// terminates external TLS, and the in-pod hop is localhost-only.
 	var protocols http.Protocols

@@ -58,6 +58,7 @@ func newCard(transports ...a2a.TransportProtocol) *a2a.AgentCard {
 func startTestServer(t *testing.T, card *a2a.AgentCard) (client *http.Client, cancel context.CancelFunc, done <-chan error) {
 	t.Helper()
 	sock := shortSock(t)
+	redirectServerInfo(t)
 	ctx, c := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
@@ -81,6 +82,15 @@ func shortSock(t *testing.T) string {
 	p := filepath.Join(os.TempDir(), fmt.Sprintf("km-%d.sock", time.Now().UnixNano()))
 	t.Cleanup(func() { _ = os.Remove(p) })
 	return p
+}
+
+// redirectServerInfo points serverInfoPath at a temp file so tests don't
+// touch /var/run/kynomesh on dev machines.
+func redirectServerInfo(t *testing.T) {
+	t.Helper()
+	prev := serverInfoPath
+	serverInfoPath = filepath.Join(t.TempDir(), "server-info")
+	t.Cleanup(func() { serverInfoPath = prev })
 }
 
 func waitForSocket(t *testing.T, path string, timeout time.Duration) {

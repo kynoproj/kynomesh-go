@@ -21,6 +21,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/kynoproj/kynomesh-go/pkg/server/serverinfo"
 )
 
 const (
@@ -28,6 +30,9 @@ const (
 	brokerSocketPath = "/var/run/kynomesh/broker.sock"
 	defaultLocalAddr = "127.0.0.1:8088"
 )
+
+// serverInfoPath is a test seam; production uses serverinfo.DefaultFilePath.
+var serverInfoPath = serverinfo.DefaultFilePath
 
 // listenMode is a test seam wrapping os.Getenv(envPodName).
 var listenMode = func() bool { return os.Getenv(envPodName) != "" }
@@ -74,4 +79,18 @@ func newListener(cfg listenerConfig) (net.Listener, error) {
 		}
 	}
 	return ln, nil
+}
+
+// writeServerInfo publishes the agent's metadata so the colocated broker
+// can read it at startup.
+func writeServerInfo(cfg listenerConfig) error {
+	info := serverinfo.Default()
+	info.Protocol = serverinfo.UDS
+	if !cfg.isUDS() {
+		info.Protocol = serverinfo.TCP
+	}
+	if err := serverinfo.Write(serverInfoPath, info); err != nil {
+		return fmt.Errorf("write server-info: %w", err)
+	}
+	return nil
 }

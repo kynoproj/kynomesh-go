@@ -17,11 +17,14 @@ limitations under the License.
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kynoproj/kynomesh-go/pkg/server/serverinfo"
 )
 
 // macOS sun_path is capped at ~104 chars; t.TempDir paths exceed it.
@@ -100,6 +103,31 @@ func TestNewListenerUDSRemovesStaleSocket(t *testing.T) {
 	}
 	if info.Mode()&os.ModeSocket == 0 {
 		t.Errorf("expected socket file, got mode %v", info.Mode())
+	}
+}
+
+func TestWriteServerInfoUDSEmitsProtocol(t *testing.T) {
+	dir := t.TempDir()
+	prev := serverInfoPath
+	serverInfoPath = filepath.Join(dir, "server-info")
+	t.Cleanup(func() { serverInfoPath = prev })
+
+	if err := writeServerInfo(listenerConfig{network: "unix", address: "/tmp/x.sock"}); err != nil {
+		t.Fatalf("writeServerInfo: %v", err)
+	}
+	data, err := os.ReadFile(serverInfoPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var got serverinfo.ServerInfo
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got.Protocol != serverinfo.UDS {
+		t.Errorf("Protocol = %q, want uds", got.Protocol)
+	}
+	if got.Language != serverinfo.Go {
+		t.Errorf("Language = %q, want go", got.Language)
 	}
 }
 
