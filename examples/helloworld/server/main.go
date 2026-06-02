@@ -54,9 +54,11 @@ func helloWorldCard() *a2a.AgentCard {
 		Description: "Just a hello world agent",
 		Version:     "0.0.1",
 		SupportedInterfaces: []*a2a.AgentInterface{
-			a2a.NewAgentInterface("http://placeholder", a2a.TransportProtocolJSONRPC),
-			a2a.NewAgentInterface("http://placeholder", a2a.TransportProtocolHTTPJSON),
-			a2a.NewAgentInterface("placeholder:0", a2a.TransportProtocolGRPC),
+			// The URLs below will be ignored when running in a K8s cluster,
+			// supplying 127.0.0.1:8088 is helpful when doing local dev testing.
+			a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolJSONRPC),
+			a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolHTTPJSON),
+			a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
 		},
 		DefaultInputModes:  []string{"text"},
 		DefaultOutputModes: []string{"text"},
@@ -78,6 +80,6 @@ func main() {
 	defer stop()
 
 	if err := server.Start(ctx, &agentExecutor{}, helloWorldCard()); err != nil {
-		log.Fatalf("kynomesh server: %v", err)
+		log.Fatalf("Agent server: %v", err)
 	}
 }
