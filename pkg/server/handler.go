@@ -39,11 +39,17 @@ type stack struct {
 	grpcServer  *grpc.Server
 }
 
-func buildStack(handler a2asrv.RequestHandler, card *a2a.AgentCard) *stack {
+// buildStack assembles the listener-facing handlers. The gRPC server is
+// always created so the standard grpc.health.v1 service can answer
+// kynoprobe regardless of which A2A transports the card advertises;
+// the A2A gRPC handler is mounted only when the card lists gRPC.
+func buildStack(handler a2asrv.RequestHandler, card *a2a.AgentCard, h *Health) *stack {
 	mux := http.NewServeMux()
 	mux.Handle(a2asrv.WellKnownAgentCardPath, a2asrv.NewStaticAgentCardHandler(card))
+	mux.Handle(HealthPath, h.httpHandler())
 
-	var grpcSrv *grpc.Server
+	grpcSrv := grpc.NewServer()
+	h.attach(grpcSrv)
 	for _, iface := range card.SupportedInterfaces {
 		switch iface.ProtocolBinding {
 		case a2a.TransportProtocolJSONRPC:
@@ -51,19 +57,13 @@ func buildStack(handler a2asrv.RequestHandler, card *a2a.AgentCard) *stack {
 		case a2a.TransportProtocolHTTPJSON:
 			mux.Handle(restPath+"/", http.StripPrefix(restPath, a2asrv.NewRESTHandler(handler)))
 		case a2a.TransportProtocolGRPC:
-			if grpcSrv == nil {
-				grpcSrv = grpc.NewServer()
-				a2agrpc.NewHandler(handler).RegisterWith(grpcSrv)
-			}
+			a2agrpc.NewHandler(handler).RegisterWith(grpcSrv)
 		}
 	}
 	return &stack{httpHandler: mux, grpcServer: grpcSrv}
 }
 
 func (s *stack) dispatcher() http.Handler {
-	if s.grpcServer == nil {
-		return s.httpHandler
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isGRPCRequest(r) {
 			s.grpcServer.ServeHTTP(w, r)
