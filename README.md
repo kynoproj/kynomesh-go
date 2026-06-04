@@ -108,30 +108,29 @@ Full example: [examples/helloworld/server](examples/helloworld/server).
 ## Health checks
 
 `server.Start` always mounts two health endpoints on the same listener so
-Kynomesh's `kynoprobe` can drive readiness and liveness probes regardless
-of which A2A transports the card advertises:
+Kynomesh's `kynoprobe` can drive readiness and liveness probes regardless of
+which A2A transports the card advertises:
 
 - **gRPC** — the standard `grpc.health.v1.Health/Check` service (matches
   `kynoprobe --mode=grpc`, the default the controller uses).
-- **HTTP** — `GET /healthz` returns `200 SERVING` or `503 NOT_SERVING`
-  (matches `kynoprobe --mode=http --path=/healthz`).
+- **HTTP** — `GET /healthz` returns `200 SERVING` or `503 NOT_SERVING` (matches
+  `kynoprobe --mode=http --path=/healthz`).
 
 By default the agent reports `SERVING` for its lifetime and flips to
-`NOT_SERVING` automatically when `Start` begins shutting down — that's
-enough for most agents and needs no extra code.
+`NOT_SERVING` automatically when `Start` begins shutting down — that's enough
+for most agents and needs no extra code.
 
 ### Writing a customized health check
 
-Out of the box, the agent always reports SERVING — which is misleading
-once your agent depends on something it can't guarantee, like an LLM
-endpoint, a database connection, or a model file loaded at startup. In
-those cases, "ready" is a property of those dependencies, not of the
-process itself.
+Out of the box, the agent always reports SERVING — which is misleading once your
+agent depends on something it can't guarantee, like an LLM endpoint, a database
+connection, or a model file loaded at startup. In those cases, "ready" is a
+property of those dependencies, not of the process itself.
 
-`server.WithHealth` lets you define what readiness actually means.
-Create a `*server.Health`, run your own checks against the things the
-agent needs, and call `SetServing(true|false)` to publish the result.
-`kynoprobe` picks up the change on its next poll.
+`server.WithHealth` lets you define what readiness actually means. Create a
+`*server.Health`, run your own checks against the things the agent needs, and
+call `SetServing(true|false)` to publish the result. `kynoprobe` picks up the
+change on its next poll.
 
 ```go
 package main
@@ -211,19 +210,20 @@ func main() {
 }
 ```
 
-`*server.Health` is safe to share across goroutines, and the same state
-is observed by both the gRPC and HTTP surfaces — `kynoprobe` sees the
-flip on its next tick regardless of which mode it runs in.
+`*server.Health` is safe to share across goroutines, and the same state is
+observed by both the gRPC and HTTP surfaces — `kynoprobe` sees the flip on its
+next tick regardless of which mode it runs in.
 
 Pick the check to match what "ready" actually means for your agent:
+
 - LLM/API-backed agent → ping the provider.
 - Agent that needs a model file on disk → check the loaded flag.
 - Agent with a bounded work queue → flip on depth thresholds.
 
-Keep the check cheap and bounded — it runs on every poll, and a slow
-check just delays the next status update.
+Keep the check cheap and bounded — it runs on every poll, and a slow check just
+delays the next status update.
 
-## Client: call a peer
+## Client: call a peer agent
 
 Within an `AgentSet`, every agent has a set of peers it is allowed to call,
 derived from the AgentSet's routing pattern. `client.NewForPeer` collapses the
