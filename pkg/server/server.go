@@ -40,6 +40,7 @@ type options struct {
 	address         string
 	shutdownTimeout time.Duration
 	handlerOpts     []a2asrv.RequestHandlerOption
+	health          *Health
 }
 
 // WithAddress overrides the listener address. An absolute path opens a
@@ -56,6 +57,14 @@ func WithRequestHandlerOptions(opts ...a2asrv.RequestHandlerOption) Option {
 	return func(o *options) { o.handlerOpts = append(o.handlerOpts, opts...) }
 }
 
+// WithHealth installs a caller-owned Health handle so the agent can flip
+// readiness (e.g., NOT_SERVING during graceful drain). If omitted, Start
+// uses an internal Health that stays SERVING for the lifetime of the
+// process. The gRPC health service and HTTP /healthz are always mounted.
+func WithHealth(h *Health) Option {
+	return func(o *options) { o.health = h }
+}
+
 func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCard, opts ...Option) error {
 	if executor == nil {
 		return errors.New("kynomesh server: executor is required")
@@ -68,9 +77,12 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 	for _, opt := range opts {
 		opt(&o)
 	}
+	if o.health == nil {
+		o.health = NewHealth()
+	}
 
 	handler := a2asrv.NewHandler(executor, o.handlerOpts...)
-	st := buildStack(handler, card)
+	st := buildStack(handler, card, o.health)
 
 	cfg := resolveListener(o)
 	ln, err := newListener(cfg)
@@ -110,22 +122,20 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 	select {
 	case <-ctx.Done():
 	case err := <-serveErr:
-		if st.grpcServer != nil {
-			st.grpcServer.Stop()
-		}
+		st.grpcServer.Stop()
 		return err
 	}
+
+	// Flip readiness first so kynoprobe pulls this replica out of
+	// rotation before the listener closes.
+	o.health.SetServing(false)
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), o.shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		if st.grpcServer != nil {
-			st.grpcServer.Stop()
-		}
+		st.grpcServer.Stop()
 		return fmt.Errorf("shutdown: %w", err)
 	}
-	if st.grpcServer != nil {
-		st.grpcServer.GracefulStop()
-	}
+	st.grpcServer.GracefulStop()
 	return <-serveErr
 }

@@ -23,34 +23,27 @@ import (
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-func TestBuildStackOnlyMountsListedTransports(t *testing.T) {
-	tests := []struct {
-		name       string
-		transports []a2a.TransportProtocol
-		wantGRPC   bool
-	}{
-		{"jsonrpc only", []a2a.TransportProtocol{a2a.TransportProtocolJSONRPC}, false},
-		{"rest only", []a2a.TransportProtocol{a2a.TransportProtocolHTTPJSON}, false},
-		{"grpc only", []a2a.TransportProtocol{a2a.TransportProtocolGRPC}, true},
-		{"all three", []a2a.TransportProtocol{
-			a2a.TransportProtocolJSONRPC,
-			a2a.TransportProtocolHTTPJSON,
-			a2a.TransportProtocolGRPC,
-		}, true},
-		{"none", nil, false},
+// The gRPC server is always built so kynoprobe's grpc.health.v1 check
+// succeeds regardless of which A2A transports the card advertises.
+func TestBuildStackAlwaysMountsGRPCForHealth(t *testing.T) {
+	cases := [][]a2a.TransportProtocol{
+		{a2a.TransportProtocolJSONRPC},
+		{a2a.TransportProtocolHTTPJSON},
+		{a2a.TransportProtocolGRPC},
+		{a2a.TransportProtocolJSONRPC, a2a.TransportProtocolHTTPJSON, a2a.TransportProtocolGRPC},
+		nil,
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			st := buildStack(a2asrv.NewHandler(noopExecutor{}), newCard(tt.transports...))
-			if got := st.grpcServer != nil; got != tt.wantGRPC {
-				t.Errorf("gRPC mounted = %v, want %v", got, tt.wantGRPC)
-			}
-			if st.httpHandler == nil {
-				t.Error("httpHandler is nil; AgentCard route should always be mounted")
-			}
-		})
+	for _, transports := range cases {
+		st := buildStack(a2asrv.NewHandler(noopExecutor{}), newCard(transports...), NewHealth())
+		if st.grpcServer == nil {
+			t.Errorf("transports=%v: grpcServer is nil, expected always-on for health", transports)
+		}
+		if _, ok := st.grpcServer.GetServiceInfo()[healthpb.Health_ServiceDesc.ServiceName]; !ok {
+			t.Errorf("transports=%v: gRPC health service not registered", transports)
+		}
 	}
 }
 
@@ -58,6 +51,7 @@ func TestDispatcherRoutesGRPCByContentType(t *testing.T) {
 	st := buildStack(
 		a2asrv.NewHandler(noopExecutor{}),
 		newCard(a2a.TransportProtocolJSONRPC, a2a.TransportProtocolGRPC),
+		NewHealth(),
 	)
 	d := st.dispatcher()
 
