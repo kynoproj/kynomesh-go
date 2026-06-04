@@ -17,9 +17,7 @@ limitations under the License.
 // Package coordinator implements the entry agent in the
 // research-assistant example. It receives a research question and
 // forwards it to the searcher peer using client.NewForPeer, then
-// returns the combined reply. This is the example's punchline: one
-// agent calling another by name, with no URLs, transports, or service
-// discovery in user code.
+// returns the combined reply.
 package coordinator
 
 import (
@@ -107,7 +105,8 @@ func Card() *a2a.AgentCard {
 		Version:     "0.0.1",
 		// Placeholder URLs — Kynomesh's broker rewrites them at serve time.
 		SupportedInterfaces: []*a2a.AgentInterface{
-			a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolJSONRPC),
+			a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/rpc", a2a.TransportProtocolJSONRPC),
+			a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/api", a2a.TransportProtocolHTTPJSON),
 			a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
 		},
 		DefaultInputModes:  []string{"text"},

@@ -28,8 +28,8 @@ import (
 
 // Paths mirror pkg/broker.JSONRPCEndpoint / RESTEndpoint in the parent repo.
 const (
-	jsonrpcPath = "/a2a/rpc"
-	restPath    = "/a2a/api"
+	jsonrpcPath = "/a2a/jsonrpc"
+	restPath    = "/a2a/rest"
 
 	grpcContentType = "application/grpc"
 )
@@ -37,6 +37,7 @@ const (
 type stack struct {
 	httpHandler http.Handler
 	grpcServer  *grpc.Server
+	transports  []string // mounted A2A transports, for startup logging
 }
 
 // buildStack assembles the listener-facing handlers. The gRPC server is
@@ -50,17 +51,21 @@ func buildStack(handler a2asrv.RequestHandler, card *a2a.AgentCard, h *Health) *
 
 	grpcSrv := grpc.NewServer()
 	h.attach(grpcSrv)
+	var mounted []string
 	for _, iface := range card.SupportedInterfaces {
 		switch iface.ProtocolBinding {
 		case a2a.TransportProtocolJSONRPC:
 			mux.Handle(jsonrpcPath, a2asrv.NewJSONRPCHandler(handler))
+			mounted = append(mounted, "jsonrpc")
 		case a2a.TransportProtocolHTTPJSON:
 			mux.Handle(restPath+"/", http.StripPrefix(restPath, a2asrv.NewRESTHandler(handler)))
+			mounted = append(mounted, "rest")
 		case a2a.TransportProtocolGRPC:
 			a2agrpc.NewHandler(handler).RegisterWith(grpcSrv)
+			mounted = append(mounted, "grpc")
 		}
 	}
-	return &stack{httpHandler: mux, grpcServer: grpcSrv}
+	return &stack{httpHandler: mux, grpcServer: grpcSrv, transports: mounted}
 }
 
 func (s *stack) dispatcher() http.Handler {
