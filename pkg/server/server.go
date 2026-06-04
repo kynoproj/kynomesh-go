@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -99,6 +100,14 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 		}
 	}
 
+	log := slog.With("agent", card.Name, "version", card.Version)
+	log.Info("Kynomesh server starting",
+		"network", cfg.network,
+		"address", cfg.address,
+		"transports", st.transports,
+		"health", []string{"grpc", "http " + HealthPath},
+	)
+
 	// Plaintext HTTP/2 lets gRPC share the listener; the broker
 	// terminates external TLS, and the in-pod hop is localhost-only.
 	var protocols http.Protocols
@@ -128,6 +137,7 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 
 	// Flip readiness first so kynoprobe pulls this replica out of
 	// rotation before the listener closes.
+	log.Info("Kynomesh server shutting down")
 	o.health.SetServing(false)
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), o.shutdownTimeout)
@@ -137,5 +147,7 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	st.grpcServer.GracefulStop()
-	return <-serveErr
+	err = <-serveErr
+	log.Info("Kynomesh server stopped")
+	return err
 }
