@@ -31,6 +31,33 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 )
 
+// fakeAgentTLS is like fakeAgent but serves over HTTPS with a self-signed
+// cert, so a TLS-verifying client will reject the connection while a
+// TLS-skipping client will accept it.
+func fakeAgentTLS(t *testing.T, name string, transports ...a2a.TransportProtocol) *httptest.Server {
+	t.Helper()
+	if len(transports) == 0 {
+		transports = []a2a.TransportProtocol{a2a.TransportProtocolJSONRPC}
+	}
+	ifaces := make([]*a2a.AgentInterface, 0, len(transports))
+	for _, tp := range transports {
+		ifaces = append(ifaces, a2a.NewAgentInterface("https://placeholder", tp))
+	}
+	card := &a2a.AgentCard{
+		Name:                name,
+		Version:             "0.0.1",
+		SupportedInterfaces: ifaces,
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc(a2asrv.WellKnownAgentCardPath, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(card)
+	})
+	srv := httptest.NewTLSServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
 // fakeAgent serves a well-known AgentCard so the resolver succeeds.
 // Transports default to JSON-RPC if none are provided.
 func fakeAgent(t *testing.T, name string, transports ...a2a.TransportProtocol) *httptest.Server {
@@ -146,5 +173,47 @@ func TestNewForPeerExternalNoDefaultTransport(t *testing.T) {
 
 	if _, err := NewForPeer(context.Background(), "third-party"); err == nil {
 		t.Error("expected error for External peer with no transport options supplied")
+	}
+}
+
+// Managed peers fetch their AgentCard with TLS verification disabled,
+// so a self-signed broker cert is accepted.
+func TestResolveAgentCardManagedSkipsTLSVerify(t *testing.T) {
+	srv := fakeAgentTLS(t, "worker-a")
+	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
+
+	card, err := ResolveAgentCard(context.Background(), "worker-a")
+	if err != nil {
+		t.Fatalf("ResolveAgentCard: %v", err)
+	}
+	if card.Name != "worker-a" {
+		t.Errorf("card.Name = %q, want worker-a", card.Name)
+	}
+}
+
+// External peers do not get the TLS-skipping resolver, so a self-signed
+// broker cert is rejected. This guards against silently trusting any
+// cert when reaching outside the cluster.
+func TestResolveAgentCardExternalVerifiesTLS(t *testing.T) {
+	srv := fakeAgentTLS(t, "third-party")
+	writeTopologyWithKind(t, "third-party", "External", srv.URL)
+
+	if _, err := ResolveAgentCard(context.Background(), "third-party"); err == nil {
+		t.Error("expected TLS verification error for External peer with self-signed cert")
+	}
+}
+
+// Managed peers build a working client even when the card is served
+// over HTTPS with a self-signed cert.
+func TestNewForPeerManagedSkipsTLSVerify(t *testing.T) {
+	srv := fakeAgentTLS(t, "worker-a")
+	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
+
+	c, err := NewForPeer(context.Background(), "worker-a")
+	if err != nil {
+		t.Fatalf("NewForPeer: %v", err)
+	}
+	if c == nil {
+		t.Fatal("client is nil")
 	}
 }
