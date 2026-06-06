@@ -42,11 +42,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// managedHTTPClient is an HTTP client that skips TLS verification. It is
-// used for Managed peers: the broker terminates external TLS and in-pod
-// hops run over the cluster network, where cert verification adds no
-// value and the broker may present a self-signed cert.
+// managedHTTPClient is an HTTP client that skips TLS verification, used for
+// Managed peers.
 var managedHTTPClient = &http.Client{
+	// TODO: timeout should be configurable
 	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // in-pod hop, broker terminates external TLS
@@ -109,15 +108,6 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 // performs the full peer-discovery flow: look up the peer URL in the
 // topology, resolve its AgentCard, and construct a client over one of
 // the interfaces the card advertises.
-//
-// For Managed peers (the default — another AgentDeploy in the same
-// AgentSet), gRPC, REST, and JSON-RPC transports are registered up
-// front with TLS verification disabled, because the broker terminates
-// external TLS and in-pod hops run over the cluster network. The card
-// itself is also fetched with TLS verification disabled. Callers can
-// override these defaults by passing their own transport options; the
-// user-supplied option wins. External peers receive no default
-// transport.
 func NewForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
