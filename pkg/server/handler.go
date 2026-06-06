@@ -28,8 +28,8 @@ import (
 
 // Paths mirror pkg/broker.JSONRPCEndpoint / RESTEndpoint in the parent repo.
 const (
-	jsonrpcPath = "/a2a/rpc"
-	restPath    = "/a2a/api"
+	jsonrpcPath = "/a2a/jsonrpc"
+	restPath    = "/a2a/rest"
 
 	grpcContentType = "application/grpc"
 )
