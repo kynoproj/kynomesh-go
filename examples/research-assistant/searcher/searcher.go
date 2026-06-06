@@ -109,7 +109,7 @@ func Card() *a2a.AgentCard {
 		Version:     "0.0.1",
 		// Placeholder URLs — Kynomesh's broker rewrites them at serve time.
 		SupportedInterfaces: []*a2a.AgentInterface{
-			a2a.NewAgentInterface("http://127.0.0.1:8089", a2a.TransportProtocolJSONRPC),
+			a2a.NewAgentInterface("http://127.0.0.1:8089/a2a/jsonrpc", a2a.TransportProtocolJSONRPC),
 			a2a.NewAgentInterface("127.0.0.1:8089", a2a.TransportProtocolGRPC),
 		},
 		DefaultInputModes:  []string{"text"},
