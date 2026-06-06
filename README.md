@@ -84,7 +84,7 @@ func main() {
         Name:    "Hello World Agent",
         Version: "0.0.1",
         SupportedInterfaces: []*a2a.AgentInterface{
-            a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolJSONRPC),
+            a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/jsonrpc", a2a.TransportProtocolJSONRPC),
             a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
         },
     }
