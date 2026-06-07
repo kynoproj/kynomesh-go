@@ -39,16 +39,19 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2aclient/agentcard"
 	a2agrpc "github.com/a2aproject/a2a-go/v2/a2agrpc/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
-// managedHTTPClient is an HTTP client that skips TLS verification, used for
-// Managed peers.
+// managedTLSConfig skips certificate verification.
+var managedTLSConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // in-pod hop, broker terminates external TLS
+
+// managedHTTPClient is an HTTP client that skips TLS verification (but
+// keeps TLS encryption), used for Managed peers.
 var managedHTTPClient = &http.Client{
 	// TODO: timeout should be configurable
 	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // in-pod hop, broker terminates external TLS
+		TLSClientConfig: managedTLSConfig,
 	},
 }
 
@@ -127,7 +130,7 @@ func NewForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 		// FactoryOption.apply writes into a per-protocol map, so the
 		// last call for a given protocol wins.
 		opts = append([]a2aclient.FactoryOption{
-			a2agrpc.WithGRPCTransport(grpc.WithTransportCredentials(insecure.NewCredentials())),
+			a2agrpc.WithGRPCTransport(grpc.WithTransportCredentials(credentials.NewTLS(managedTLSConfig))),
 			a2aclient.WithRESTTransport(managedHTTPClient),
 			a2aclient.WithJSONRPCTransport(managedHTTPClient),
 		}, opts...)
