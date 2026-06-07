@@ -39,9 +39,7 @@ func main() {
 	ctx := context.Background()
 
 	// Look up the peer's URL, fetch its AgentCard, and build an
-	// a2a client over one of its advertised transports. For Managed peers
-	// NewForPeer registers a gRPC transport with insecure credentials by
-	// default.
+	// a2a client over one of its advertised transports.
 	c, err := client.NewForPeer(ctx, *peerName)
 	if err != nil {
 		log.Fatalf("Failed to create a client for peer %q: %v", *peerName, err)
