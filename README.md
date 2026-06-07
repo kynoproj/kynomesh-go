@@ -245,9 +245,9 @@ func main() {
     ctx := context.Background()
 
     // Discover the peer, fetch its AgentCard, and build an a2a
-    // client. For Managed peers (the default — peers in the same
-    // AgentSet), NewForPeer registers a gRPC transport with
-    // insecure credentials by default; pass
+    // client. For Managed peer agents, when the gRPC transport is
+    // used, NewForPeer registers a gRPC transport that uses TLS
+    // for encryption but skips certificate verification. Pass
     // a2agrpc.WithGRPCTransport(...) to override.
     c, err := client.NewForPeer(ctx, "worker-a")
     if err != nil {
