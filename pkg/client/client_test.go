@@ -147,10 +147,10 @@ func TestNewForPeerPropagatesPeerNotFound(t *testing.T) {
 	}
 }
 
-// Managed peers get an insecure gRPC transport by default, so building
-// a client against a card that only advertises gRPC succeeds without
-// the caller passing any transport options.
-func TestNewForPeerManagedDefaultsInsecureGRPC(t *testing.T) {
+// Managed peers get a default gRPC transport (TLS with verification
+// skipped) so building a client against a card that only advertises
+// gRPC succeeds without the caller passing any transport options.
+func TestNewForPeerManagedDefaultsGRPC(t *testing.T) {
 	srv := fakeAgent(t, "worker-a", a2a.TransportProtocolGRPC)
 	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
 
