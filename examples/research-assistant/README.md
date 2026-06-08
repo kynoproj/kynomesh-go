@@ -68,7 +68,7 @@ declaration order. The agent code doesn't change — the topology does.
 You need a Kubernetes cluster with [Kynomesh installed][install] and a container
 registry you can push to.
 
-[install]: https://github.com/kynoproj/kynomesh#install
+[install]: https://github.com/kynoproj/kynomesh
 
 ```bash
 # 1. Build one image for both agents. The included Dockerfile produces a
@@ -85,8 +85,10 @@ make -C examples/research-assistant \
 make -C examples/research-assistant \
     IMAGE_REPO=your-registry.example/research-assistant buildx-push
 
-# 2. Edit manifests/agentset.yaml and replace the two REPLACE_ME image values
-#    with the single image you just built.
+# 2. If you pushed to your own registry, edit manifests/agentset.yaml and
+#    point both `image:` values at it. The committed manifest references
+#    quay.io/kynoio/examples/research-assistant-go:latest, which works as-is
+#    if you can pull from quay.io.
 
 # 3. Apply.
 kubectl apply -f examples/research-assistant/manifests/agentset.yaml
@@ -94,27 +96,37 @@ kubectl apply -f examples/research-assistant/manifests/agentset.yaml
 # 4. Wait for the AgentSet to be Ready.
 kubectl wait --for=condition=Deployed agentset/research-assistant --timeout=120s
 
-# 5. Send a question to the coordinator. Port-forward the entry agent's
-#    broker and send an A2A request to it with any A2A client — the repo
-#    ships a small one you can use:
-kubectl port-forward svc/research-assistant-coordinator-headless 8090:8490 &
-go run ../helloworld/client -peer coordinator
+# 5. Send a question to the coordinator. Install the a2acli A2A client from
+#    https://github.com/kynoproj/a2acli, port-forward the coordinator's
+#    broker, and send a request:
+kubectl port-forward svc/research-assistant-coordinator-headless 8490:8490 &
+./a2acli -k -u https://localhost:8490 --override-host=127.0.0.1:8490 \
+    send 'Hello, what can you do?'
 ```
+
+The flags: `-k` skips TLS verification (the broker serves a self-signed cert),
+and `--override-host` keeps the SNI/Host header aligned with the in-cluster
+service name the broker expects.
 
 You should see something like:
 
-```
-Server responded with: &{Message:0x... Parts:[
-  coordinator: handled "Hello, world" via "searcher"
-  ---
-  searcher: no hits for "hello, world"
-]}
+```json
+{
+  "messageId": "019ea01f-96ea-7590-963d-7fc6b05e569e",
+  "parts": [
+    {
+      "text": "coordinator: handled \"Hello, what can you do?\" via \"searcher\"\n---\nsearcher: no hits for \"hello, what can you do?\""
+    }
+  ],
+  "role": "ROLE_AGENT"
+}
 ```
 
 Try a query the corpus knows:
 
 ```bash
-go run ../helloworld/client -peer coordinator <<<'tell me about kynomesh'
+./a2acli -k -u https://localhost:8490 --override-host=127.0.0.1:8490 \
+    send 'tell me about kynomesh'
 ```
 
 …and the searcher fires back hits the coordinator wraps and returns.
