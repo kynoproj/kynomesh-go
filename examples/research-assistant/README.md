@@ -100,7 +100,7 @@ kubectl wait --for=condition=Deployed agentset/research-assistant --timeout=120s
 #    https://github.com/kynoproj/a2acli, port-forward the coordinator's
 #    broker, and send a request:
 kubectl port-forward svc/research-assistant-coordinator-headless 8490:8490 &
-./a2acli -k -u https://localhost:8490 --override-host=127.0.0.1:8490 \
+./a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
     send 'Hello, what can you do?'
 ```
 
@@ -125,7 +125,7 @@ You should see something like:
 Try a query the corpus knows:
 
 ```bash
-./a2acli -k -u https://localhost:8490 --override-host=127.0.0.1:8490 \
+./a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
     send 'tell me about kynomesh'
 ```
 
@@ -136,31 +136,6 @@ Try a query the corpus knows:
 ```bash
 kubectl delete -f examples/research-assistant/manifests/agentset.yaml
 ```
-
-## What just happened
-
-When you applied the AgentSet, the Kynomesh controller:
-
-1. Created one `AgentDeploy` per agent (coordinator, searcher).
-2. Per pod, scheduled:
-   - a **broker** sidecar (Kynomesh-supplied) that terminates A2A on TLS and
-     proxies to the agent over a Unix domain socket
-   - an **init-runtime** init container that writes a per-agent `topology.json`
-     describing which peers this agent may reach, plus the `kynoprobe` binary
-     used by the agent container's readiness/liveness probes
-   - your **agent** container (the binary you built)
-3. Created one headless `Service` per agent so peers reach replicas via stable
-   cluster DNS.
-
-In the coordinator's pod, `topology.json` lists `searcher` as a Managed peer
-with a URL pointing at `research-assistant-searcher-headless.<ns>.svc...`.
-`client.NewForPeer(ctx, "searcher")` reads that file, fetches the searcher's
-AgentCard from the URL, and builds an A2A client over its preferred transport.
-Your code never sees the URL.
-
-In the searcher's pod, `topology.json` lists **no peers** — because
-`pattern: Supervisor` says workers don't talk to anyone. If `searcher` tried
-`client.NewForPeer(ctx, "coordinator")` it would get `ErrPeerNotFound`.
 
 ## What to try next
 
