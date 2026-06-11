@@ -65,43 +65,29 @@ declaration order. The agent code doesn't change — the topology does.
 
 ## Run it
 
-You need a Kubernetes cluster with [Kynomesh installed][install] and a container
-registry you can push to.
-
-[install]: https://github.com/kynoproj/kynomesh
+You need a Kubernetes cluster with `Kynomesh`
+[installed](https://github.com/kynoproj/kynomesh/blob/main/docs/operations/installation.md).
 
 ```bash
-# 1. Build one image for both agents. The included Dockerfile produces a
-#    static binary in distroless; the Makefile wraps docker build/push.
 
-# Local build:
-make -C examples/research-assistant build
+# 1. Install a2acli client:
 
-# Or push to a registry:
-make -C examples/research-assistant \
-    IMAGE_REPO=your-registry.example/research-assistant push
+curl -fsSL https://raw.githubusercontent.com/kynoproj/a2acli/main/install.sh | bash
 
-# Multi-arch (linux/amd64,linux/arm64) via buildx:
-make -C examples/research-assistant \
-    IMAGE_REPO=your-registry.example/research-assistant buildx-push
+# 2. Apply the AgentSet manifest.
 
-# 2. If you pushed to your own registry, edit manifests/agentset.yaml and
-#    point both `image:` values at it. The committed manifest references
-#    quay.io/kynoio/examples/research-assistant-go:latest, which works as-is
-#    if you can pull from quay.io.
-
-# 3. Apply.
 kubectl apply -f examples/research-assistant/manifests/agentset.yaml
 
-# 4. Wait for the AgentSet to be Ready.
+# 3. Wait for the AgentSet to be Ready.
+
 kubectl wait --for=condition=Deployed agentset/research-assistant --timeout=120s
 
-# 5. Send a question to the coordinator. Install the a2acli A2A client from
-#    https://github.com/kynoproj/a2acli, port-forward the coordinator's
-#    broker, and send a request:
+# 4. Port-forward the coordinator's broker, and send a request, and send a question to the coordinator:
+
 kubectl port-forward svc/research-assistant-coordinator-headless 8490:8490 &
 ./a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
-    send 'Hello, what can you do?'
+ send 'Hello, what can you do?'
+
 ```
 
 The flags: `-k` skips TLS verification (the broker serves a self-signed cert),
@@ -125,7 +111,7 @@ You should see something like:
 Try a query the corpus knows:
 
 ```bash
-./a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
+a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
     send 'tell me about kynomesh'
 ```
 
@@ -136,10 +122,3 @@ Try a query the corpus knows:
 ```bash
 kubectl delete -f examples/research-assistant/manifests/agentset.yaml
 ```
-
-## What to try next
-
-- Change `pattern` to `Handoff` and have both agents call each other.
-- Add a third agent and watch the topology change without touching code.
-- Replace the canned corpus in `main.go` with a real retrieval call — the
-  `searcher` half of the binary is the only piece you'd actually edit.
