@@ -82,11 +82,13 @@ kubectl apply -f examples/research-assistant/manifests/agentset.yaml
 
 kubectl wait --for=condition=Deployed agentset/research-assistant --timeout=120s
 
-# 4. Port-forward the coordinator's broker, and send a request, and send a question to the coordinator:
+# 4. Port-forward the research assistant's ingress endpoint.
 
-kubectl port-forward svc/research-assistant-coordinator-headless 8490:8490 &
-./a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
- send 'Hello, what can you do?'
+kubectl port-forward svc/research-assistant-ingress 8490
+
+#5. In a different terminal, send a question to the ingress.
+
+a2acli -k -u https://localhost:8490 --override-host=localhost:8490 send 'Hello, what can you do?'
 
 ```
 
