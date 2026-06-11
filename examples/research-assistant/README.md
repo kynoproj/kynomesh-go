@@ -88,8 +88,7 @@ kubectl port-forward svc/research-assistant-ingress 8490
 
 #5. In a different terminal, send a question to the ingress.
 
-a2acli -k -u https://localhost:8490 --override-host=localhost:8490 \
- send 'Hello, what can you do?'
+a2acli -k -u https://localhost:8490 --override-host=localhost:8490 send 'Hello, what can you do?'
 
 ```
 
