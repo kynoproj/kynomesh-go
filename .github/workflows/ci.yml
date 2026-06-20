@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v6
@@ -51,7 +51,7 @@ jobs:
       GOPATH: /home/runner/go
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Golang
         uses: actions/setup-go@v6
         with:
