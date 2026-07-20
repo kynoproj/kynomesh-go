@@ -17,6 +17,14 @@ PLATFORMS     ?= linux/amd64,linux/arm64
 REPO_ROOT     := $(abspath $(CURDIR)/../..)
 DOCKERFILE    := $(CURDIR)/Dockerfile
 
+# Optional: point CA_CERT at a corporate proxy CA (e.g. Netskope) so module
+# fetches over an intercepted TLS connection verify inside the builder. When
+# set, its directory is exposed to the build as the `cacert` context.
+CA_CERT       ?=
+ifneq ($(CA_CERT),)
+CACERT_ARG    := --build-context cacert=$(dir $(CA_CERT))
+endif
+
 .PHONY: all
 all: build
 
@@ -25,6 +33,7 @@ build: ## Build the image for the host platform.
 	docker build \
 		-f $(DOCKERFILE) \
 		-t $(IMAGE) \
+		$(CACERT_ARG) \
 		$(REPO_ROOT)
 
 .PHONY: push
@@ -37,6 +46,7 @@ buildx-push: ## Build and push a multi-arch manifest ($(PLATFORMS)).
 		--platform $(PLATFORMS) \
 		-f $(DOCKERFILE) \
 		-t $(IMAGE) \
+		$(CACERT_ARG) \
 		--push \
 		$(REPO_ROOT)
 
