@@ -1,0 +1,27 @@
+# AgentSet for the slow-agent example.
+#
+# A single agent whose handler holds each request open for a fixed delay, so
+# concurrent requests accumulate as in-flight occupancy. Used by the Kynomesh
+# autoscaling e2e test: sustained concurrent load drives spec.replicas up.
+apiVersion: kynomesh.kyno.sh/v1alpha1
+kind: AgentSet
+metadata:
+  name: slow-agent
+spec:
+  pattern: Supervisor
+  entry: slow
+  agents:
+    - name: slow
+      container:
+        image: quay.io/kynoio/examples/slow-agent-go:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: SLOW_AGENT_DELAY
+            value: "5s"
+      # Autoscaling: start at 1, allow up to 5. targetSaturationPercentage: 100
+      # keeps the per-replica target at the learned/default knee so a burst of
+      # concurrent in-flight requests trips the surge fast-path.
+      scale:
+        min: 1
+        max: 5
+        targetSaturationPercentage: 100
