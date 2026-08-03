@@ -3,7 +3,7 @@ module github.com/kynoproj/kynomesh-go
 go 1.26.0
 
 require (
-	github.com/a2aproject/a2a-go/v2 v2.3.1
+	github.com/a2aproject/a2a-go/v2 v2.4.0
 	google.golang.org/grpc v1.82.1
 )
 
