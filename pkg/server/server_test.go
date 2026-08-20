@@ -57,31 +57,44 @@ func newCard(transports ...a2a.TransportProtocol) *a2a.AgentCard {
 
 func startTestServer(t *testing.T, card *a2a.AgentCard) (client *http.Client, cancel context.CancelFunc, done <-chan error) {
 	t.Helper()
-	sock := shortSock(t)
+	socks := shortSocks(t)
 	redirectServerInfo(t)
 	ctx, c := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Start(ctx, noopExecutor{}, card, WithAddress(sock), WithShutdownTimeout(2*time.Second))
+		errCh <- Start(ctx, noopExecutor{}, card, WithHTTPAddress(socks.http), WithGRPCAddress(socks.grpc), WithShutdownTimeout(2*time.Second))
 	}()
-	waitForSocket(t, sock, 2*time.Second)
+	waitForSocket(t, socks.http, 2*time.Second)
+	waitForSocket(t, socks.grpc, 2*time.Second)
 	cl := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				var d net.Dialer
-				return d.DialContext(ctx, "unix", sock)
+				return d.DialContext(ctx, "unix", socks.http)
 			},
 		},
 	}
 	return cl, c, errCh
 }
 
+// testSockets holds a pair of short UDS paths for a split HTTP/gRPC server
+// under test.
+type testSockets struct {
+	http string
+	grpc string
+}
+
 // macOS sun_path is capped at ~104 chars; t.TempDir paths exceed it.
-func shortSock(t *testing.T) string {
+func shortSock(t *testing.T, tag string) string {
 	t.Helper()
-	p := filepath.Join(os.TempDir(), fmt.Sprintf("km-%d.sock", time.Now().UnixNano()))
+	p := filepath.Join(os.TempDir(), fmt.Sprintf("km-%s-%d.sock", tag, time.Now().UnixNano()))
 	t.Cleanup(func() { _ = os.Remove(p) })
 	return p
+}
+
+func shortSocks(t *testing.T) testSockets {
+	t.Helper()
+	return testSockets{http: shortSock(t, "http"), grpc: shortSock(t, "grpc")}
 }
 
 // redirectServerInfo points serverInfoPath at a temp file so tests don't

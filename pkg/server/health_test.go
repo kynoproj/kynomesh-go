@@ -44,7 +44,7 @@ func TestGRPCHealthCheckServingAcrossTransports(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sock, cancel, done := startWithHealth(t, newCard(tt.transports...), nil)
+			socks, cancel, done := startWithHealth(t, newCard(tt.transports...), nil)
 			defer func() {
 				cancel()
 				if err := <-done; err != nil {
@@ -52,7 +52,7 @@ func TestGRPCHealthCheckServingAcrossTransports(t *testing.T) {
 				}
 			}()
 
-			status := dialAndCheck(t, sock, "")
+			status := dialAndCheck(t, socks.grpc, "")
 			if status != healthpb.HealthCheckResponse_SERVING {
 				t.Errorf("grpc health status = %s, want SERVING", status)
 			}
@@ -62,7 +62,7 @@ func TestGRPCHealthCheckServingAcrossTransports(t *testing.T) {
 
 // kynoprobe's http mode hits /healthz over the UDS and expects 2xx.
 func TestHTTPHealthzServing(t *testing.T) {
-	sock, cancel, done := startWithHealth(t, newCard(a2a.TransportProtocolJSONRPC), nil)
+	socks, cancel, done := startWithHealth(t, newCard(a2a.TransportProtocolJSONRPC), nil)
 	defer func() {
 		cancel()
 		if err := <-done; err != nil {
@@ -70,7 +70,7 @@ func TestHTTPHealthzServing(t *testing.T) {
 		}
 	}()
 
-	resp := httpGetUDS(t, sock, HealthPath)
+	resp := httpGetUDS(t, socks.http, HealthPath)
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
@@ -80,7 +80,7 @@ func TestHTTPHealthzServing(t *testing.T) {
 // SetServing(false) must flip both surfaces before shutdown completes.
 func TestHealthSetServingFlipsBothSurfaces(t *testing.T) {
 	h := NewHealth()
-	sock, cancel, done := startWithHealth(t, newCard(a2a.TransportProtocolJSONRPC), h)
+	socks, cancel, done := startWithHealth(t, newCard(a2a.TransportProtocolJSONRPC), h)
 	defer func() {
 		cancel()
 		if err := <-done; err != nil {
@@ -90,31 +90,32 @@ func TestHealthSetServingFlipsBothSurfaces(t *testing.T) {
 
 	h.SetServing(false)
 
-	if got := dialAndCheck(t, sock, ""); got != healthpb.HealthCheckResponse_NOT_SERVING {
+	if got := dialAndCheck(t, socks.grpc, ""); got != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Errorf("grpc status = %s, want NOT_SERVING", got)
 	}
-	resp := httpGetUDS(t, sock, HealthPath)
+	resp := httpGetUDS(t, socks.http, HealthPath)
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("http status = %d, want 503", resp.StatusCode)
 	}
 }
 
-func startWithHealth(t *testing.T, card *a2a.AgentCard, h *Health) (sock string, cancel context.CancelFunc, done <-chan error) {
+func startWithHealth(t *testing.T, card *a2a.AgentCard, h *Health) (socks testSockets, cancel context.CancelFunc, done <-chan error) {
 	t.Helper()
-	sock = shortSock(t)
+	socks = shortSocks(t)
 	redirectServerInfo(t)
 	ctx, c := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
-	opts := []Option{WithAddress(sock), WithShutdownTimeout(2 * time.Second)}
+	opts := []Option{WithHTTPAddress(socks.http), WithGRPCAddress(socks.grpc), WithShutdownTimeout(2 * time.Second)}
 	if h != nil {
 		opts = append(opts, WithHealth(h))
 	}
 	go func() {
 		errCh <- Start(ctx, noopExecutor{}, card, opts...)
 	}()
-	waitForSocket(t, sock, 2*time.Second)
-	return sock, c, errCh
+	waitForSocket(t, socks.http, 2*time.Second)
+	waitForSocket(t, socks.grpc, 2*time.Second)
+	return socks, c, errCh
 }
 
 func dialAndCheck(t *testing.T, sock, service string) healthpb.HealthCheckResponse_ServingStatus {

@@ -26,9 +26,20 @@ import (
 )
 
 const (
-	envPodName       = "POD_NAME"
-	brokerSocketPath = "/var/run/kynomesh/broker.sock"
-	defaultLocalAddr = "127.0.0.1:8088"
+	envPodName = "POD_NAME"
+
+	// brokerHTTPSocketPath and brokerGRPCSocketPath must stay in sync
+	// with kmv1.BrokerHTTPSocketPath / kmv1.BrokerGRPCSocketPath in
+	// kynoproj/kynomesh: the broker dials the agent's HTTP and gRPC
+	// servers at these independent sockets in-pod.
+	brokerHTTPSocketPath = "/var/run/kynomesh/broker-http.sock"
+	brokerGRPCSocketPath = "/var/run/kynomesh/broker-grpc.sock"
+
+	// defaultLocalHTTPAddr and defaultLocalGRPCAddr must stay in sync
+	// with DefaultLocalAgentHTTPAddr / DefaultLocalAgentGRPCAddr in
+	// kynoproj/kynomesh.
+	defaultLocalHTTPAddr = "127.0.0.1:8088"
+	defaultLocalGRPCAddr = "127.0.0.1:8089"
 )
 
 // serverInfoPath is a test seam; production uses serverinfo.DefaultFilePath.
@@ -44,18 +55,28 @@ type listenerConfig struct {
 
 func (c listenerConfig) isUDS() bool { return c.network == "unix" }
 
-func resolveListener(opts options) listenerConfig {
-	if opts.address != "" {
+// resolveListeners picks the HTTP and gRPC listener targets. An explicit
+// override (WithHTTPAddress / WithGRPCAddress) wins for its protocol;
+// otherwise in-pod uses the broker UDS sockets and local-dev uses the
+// default TCP ports.
+func resolveListeners(opts options) (httpCfg, grpcCfg listenerConfig) {
+	httpCfg = resolveListener(opts.httpAddress, brokerHTTPSocketPath, defaultLocalHTTPAddr)
+	grpcCfg = resolveListener(opts.grpcAddress, brokerGRPCSocketPath, defaultLocalGRPCAddr)
+	return httpCfg, grpcCfg
+}
+
+func resolveListener(explicit, udsDefault, tcpDefault string) listenerConfig {
+	if explicit != "" {
 		network := "tcp"
-		if filepath.IsAbs(opts.address) {
+		if filepath.IsAbs(explicit) {
 			network = "unix"
 		}
-		return listenerConfig{network: network, address: opts.address}
+		return listenerConfig{network: network, address: explicit}
 	}
 	if listenMode() {
-		return listenerConfig{network: "unix", address: brokerSocketPath}
+		return listenerConfig{network: "unix", address: udsDefault}
 	}
-	return listenerConfig{network: "tcp", address: defaultLocalAddr}
+	return listenerConfig{network: "tcp", address: tcpDefault}
 }
 
 func newListener(cfg listenerConfig) (net.Listener, error) {
@@ -82,11 +103,12 @@ func newListener(cfg listenerConfig) (net.Listener, error) {
 }
 
 // writeServerInfo publishes the agent's metadata so the colocated broker
-// can read it at startup.
-func writeServerInfo(cfg listenerConfig) error {
+// can read it at startup. httpCfg's protocol is recorded; HTTP and gRPC
+// always resolve to the same protocol (both UDS or both TCP).
+func writeServerInfo(httpCfg listenerConfig) error {
 	info := serverinfo.Default()
 	info.Protocol = serverinfo.UDS
-	if !cfg.isUDS() {
+	if !httpCfg.isUDS() {
 		info.Protocol = serverinfo.TCP
 	}
 	if err := serverinfo.Write(serverInfoPath, info); err != nil {

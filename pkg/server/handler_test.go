@@ -47,45 +47,20 @@ func TestBuildStackAlwaysMountsGRPCForHealth(t *testing.T) {
 	}
 }
 
-func TestDispatcherRoutesGRPCByContentType(t *testing.T) {
+// The HTTP listener only ever serves the HTTP mux; gRPC has its own
+// listener and server entirely, so the AgentCard route must answer
+// regardless of what content-type/proto version a request carries.
+func TestHTTPHandlerServesAgentCardRegardlessOfHeaders(t *testing.T) {
 	st := buildStack(
 		a2asrv.NewHandler(noopExecutor{}),
 		newCard(a2a.TransportProtocolJSONRPC, a2a.TransportProtocolGRPC),
 		NewHealth(),
 	)
-	d := st.dispatcher()
 
-	// gRPC requires HTTP/2; HTTP/1 must not be routed to grpcServer.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, a2asrv.WellKnownAgentCardPath, nil)
-	req.Header.Set("Content-Type", grpcContentType)
-	req.ProtoMajor = 1
-	d.ServeHTTP(rec, req)
+	st.httpHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Errorf("HTTP/1 with grpc content-type: status = %d, want 200 (AgentCard)", rec.Code)
-	}
-}
-
-func TestIsGRPCRequest(t *testing.T) {
-	tests := []struct {
-		name        string
-		protoMajor  int
-		contentType string
-		want        bool
-	}{
-		{"http2 grpc", 2, "application/grpc", true},
-		{"http2 grpc+proto", 2, "application/grpc+proto", true},
-		{"http2 json", 2, "application/json", false},
-		{"http1 grpc", 1, "application/grpc", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "/", nil)
-			r.ProtoMajor = tt.protoMajor
-			r.Header.Set("Content-Type", tt.contentType)
-			if got := isGRPCRequest(r); got != tt.want {
-				t.Errorf("isGRPCRequest = %v, want %v", got, tt.want)
-			}
-		})
+		t.Errorf("status = %d, want 200 (AgentCard)", rec.Code)
 	}
 }
