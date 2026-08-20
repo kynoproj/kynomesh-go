@@ -96,11 +96,9 @@ func main() {
 
 What `server.Start` does for you:
 
-- Picks the right listeners for the runtime — in-cluster this is a pair of
-  UDS sockets under `/var/run/kynomesh`; in local dev it's `127.0.0.1:8088`
-  for HTTP and `127.0.0.1:8089` for gRPC. HTTP and gRPC always get
-  independent listeners, since not every agent runtime can multiplex both
-  on one port or socket.
+- Picks the right listeners for the runtime — in-cluster this is a pair of UDS
+  sockets under `/var/run/kynomesh`; in local dev it's `127.0.0.1:8088` for HTTP
+  and `127.0.0.1:8089` for gRPC.
 - Mounts JSON-RPC, REST, and gRPC transports based on
   `card.SupportedInterfaces`.
 - Advertises the agent so peers can discover it.

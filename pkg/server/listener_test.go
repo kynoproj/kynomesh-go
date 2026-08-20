@@ -82,9 +82,9 @@ func TestResolveListeners(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prev := listenMode
-			listenMode = func() bool { return tt.inPod }
-			defer func() { listenMode = prev }()
+			prev := inCluster
+			inCluster = func() bool { return tt.inPod }
+			defer func() { inCluster = prev }()
 
 			gotHTTP, gotGRPC := resolveListeners(tt.opts)
 			if gotHTTP.network != tt.wantHTTPNet || gotHTTP.address != tt.wantHTTPAddr {

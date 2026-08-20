@@ -18,10 +18,7 @@ limitations under the License.
 //
 // Start binds two independent listeners, one for HTTP (AgentCard,
 // JSON-RPC, REST, /healthz) and one for gRPC (A2A gRPC transport,
-// grpc.health.v1) — the broker dials each protocol at its own target,
-// since some agent runtimes cannot multiplex both on a single port or
-// socket. In-pod (POD_NAME set) each defaults to its own UDS under
-// /var/run/kynomesh; locally each defaults to its own TCP port
+// grpc.health.v1); locally each defaults to its own TCP port
 // (127.0.0.1:8088 for HTTP, 127.0.0.1:8089 for gRPC). Start mounts the
 // transports listed in card.SupportedInterfaces.
 package server

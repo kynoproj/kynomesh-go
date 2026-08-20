@@ -28,16 +28,9 @@ import (
 const (
 	envPodName = "POD_NAME"
 
-	// brokerHTTPSocketPath and brokerGRPCSocketPath must stay in sync
-	// with kmv1.BrokerHTTPSocketPath / kmv1.BrokerGRPCSocketPath in
-	// kynoproj/kynomesh: the broker dials the agent's HTTP and gRPC
-	// servers at these independent sockets in-pod.
 	brokerHTTPSocketPath = "/var/run/kynomesh/broker-http.sock"
 	brokerGRPCSocketPath = "/var/run/kynomesh/broker-grpc.sock"
 
-	// defaultLocalHTTPAddr and defaultLocalGRPCAddr must stay in sync
-	// with DefaultLocalAgentHTTPAddr / DefaultLocalAgentGRPCAddr in
-	// kynoproj/kynomesh.
 	defaultLocalHTTPAddr = "127.0.0.1:8088"
 	defaultLocalGRPCAddr = "127.0.0.1:8089"
 )
@@ -45,8 +38,8 @@ const (
 // serverInfoPath is a test seam; production uses serverinfo.DefaultFilePath.
 var serverInfoPath = serverinfo.DefaultFilePath
 
-// listenMode is a test seam wrapping os.Getenv(envPodName).
-var listenMode = func() bool { return os.Getenv(envPodName) != "" }
+// inCluster is a test seam wrapping os.Getenv(envPodName).
+var inCluster = func() bool { return os.Getenv(envPodName) != "" }
 
 type listenerConfig struct {
 	network string
@@ -73,7 +66,7 @@ func resolveListener(explicit, udsDefault, tcpDefault string) listenerConfig {
 		}
 		return listenerConfig{network: network, address: explicit}
 	}
-	if listenMode() {
+	if inCluster() {
 		return listenerConfig{network: "unix", address: udsDefault}
 	}
 	return listenerConfig{network: "tcp", address: tcpDefault}
@@ -103,8 +96,7 @@ func newListener(cfg listenerConfig) (net.Listener, error) {
 }
 
 // writeServerInfo publishes the agent's metadata so the colocated broker
-// can read it at startup. httpCfg's protocol is recorded; HTTP and gRPC
-// always resolve to the same protocol (both UDS or both TCP).
+// can read it at startup.
 func writeServerInfo(httpCfg listenerConfig) error {
 	info := serverinfo.Default()
 	info.Protocol = serverinfo.UDS
