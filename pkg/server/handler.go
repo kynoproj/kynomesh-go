@@ -18,7 +18,6 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	a2agrpc "github.com/a2aproject/a2a-go/v2/a2agrpc/v1"
@@ -30,8 +29,6 @@ import (
 const (
 	jsonrpcPath = "/a2a/jsonrpc"
 	restPath    = "/a2a/rest"
-
-	grpcContentType = "application/grpc"
 )
 
 type stack struct {
@@ -66,21 +63,4 @@ func buildStack(handler a2asrv.RequestHandler, card *a2a.AgentCard, h *Health) *
 		}
 	}
 	return &stack{httpHandler: mux, grpcServer: grpcSrv, transports: mounted}
-}
-
-func (s *stack) dispatcher() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isGRPCRequest(r) {
-			s.grpcServer.ServeHTTP(w, r)
-			return
-		}
-		s.httpHandler.ServeHTTP(w, r)
-	})
-}
-
-func isGRPCRequest(r *http.Request) bool {
-	if r.ProtoMajor != 2 {
-		return false
-	}
-	return strings.HasPrefix(r.Header.Get("Content-Type"), grpcContentType)
 }

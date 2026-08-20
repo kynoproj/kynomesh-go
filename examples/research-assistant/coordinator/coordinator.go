@@ -107,7 +107,7 @@ func Card() *a2a.AgentCard {
 		SupportedInterfaces: []*a2a.AgentInterface{
 			a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/jsonrpc", a2a.TransportProtocolJSONRPC),
 			a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/rest", a2a.TransportProtocolHTTPJSON),
-			a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
+			a2a.NewAgentInterface("127.0.0.1:8089", a2a.TransportProtocolGRPC),
 		},
 		DefaultInputModes:  []string{"text"},
 		DefaultOutputModes: []string{"text"},

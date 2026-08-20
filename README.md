@@ -85,7 +85,7 @@ func main() {
         Version: "0.0.1",
         SupportedInterfaces: []*a2a.AgentInterface{
             a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/jsonrpc", a2a.TransportProtocolJSONRPC),
-            a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
+            a2a.NewAgentInterface("127.0.0.1:8089", a2a.TransportProtocolGRPC),
         },
     }
     if err := server.Start(ctx, &agentExecutor{}, card); err != nil {
@@ -96,9 +96,9 @@ func main() {
 
 What `server.Start` does for you:
 
-- Picks the right listener for the runtime — an in-cluster transport when
-  running under Kynomesh, or a local TCP address (`127.0.0.1:8088`) for
-  development.
+- Picks the right listeners for the runtime — in-cluster this is a pair of UDS
+  sockets under `/var/run/kynomesh`; in local dev it's `127.0.0.1:8088` for HTTP
+  and `127.0.0.1:8089` for gRPC.
 - Mounts JSON-RPC, REST, and gRPC transports based on
   `card.SupportedInterfaces`.
 - Advertises the agent so peers can discover it.
@@ -107,7 +107,7 @@ Full example: [examples/helloworld/server](examples/helloworld/server).
 
 ## Health checks
 
-`server.Start` always mounts two health endpoints on the same listener so
+`server.Start` always mounts two health endpoints, one per listener, so
 Kynomesh's `kynoprobe` can drive readiness and liveness probes regardless of
 which A2A transports the card advertises:
 

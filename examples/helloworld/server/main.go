@@ -54,11 +54,12 @@ func helloWorldCard() *a2a.AgentCard {
 		Description: "Just a hello world agent",
 		Version:     "0.0.1",
 		SupportedInterfaces: []*a2a.AgentInterface{
-			// The URLs below will be ignored when running in a K8s cluster,
-			// supplying 127.0.0.1:8088 is helpful when doing local dev testing.
+			// The URLs below will be ignored when running in a K8s cluster;
+			// supplying the local-dev HTTP (8088) and gRPC (8089) ports is
+			// helpful when doing local dev testing.
 			a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolJSONRPC),
 			a2a.NewAgentInterface("http://127.0.0.1:8088", a2a.TransportProtocolHTTPJSON),
-			a2a.NewAgentInterface("127.0.0.1:8088", a2a.TransportProtocolGRPC),
+			a2a.NewAgentInterface("127.0.0.1:8089", a2a.TransportProtocolGRPC),
 		},
 		DefaultInputModes:  []string{"text"},
 		DefaultOutputModes: []string{"text"},

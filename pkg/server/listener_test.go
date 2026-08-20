@@ -35,51 +35,65 @@ func shortSockPath(t *testing.T) string {
 	return p
 }
 
-func TestResolveListener(t *testing.T) {
+func TestResolveListeners(t *testing.T) {
 	tests := []struct {
-		name     string
-		inPod    bool
-		opts     options
-		wantNet  string
-		wantAddr string
+		name         string
+		inPod        bool
+		opts         options
+		wantHTTPNet  string
+		wantHTTPAddr string
+		wantGRPCNet  string
+		wantGRPCAddr string
 	}{
 		{
-			name:     "in-pod defaults to UDS at broker socket path",
-			inPod:    true,
-			wantNet:  "unix",
-			wantAddr: brokerSocketPath,
+			name:         "in-pod defaults to UDS at the broker socket paths",
+			inPod:        true,
+			wantHTTPNet:  "unix",
+			wantHTTPAddr: brokerHTTPSocketPath,
+			wantGRPCNet:  "unix",
+			wantGRPCAddr: brokerGRPCSocketPath,
 		},
 		{
-			name:     "outside pod defaults to local TCP",
-			inPod:    false,
-			wantNet:  "tcp",
-			wantAddr: defaultLocalAddr,
+			name:         "outside pod defaults to local TCP ports",
+			inPod:        false,
+			wantHTTPNet:  "tcp",
+			wantHTTPAddr: defaultLocalHTTPAddr,
+			wantGRPCNet:  "tcp",
+			wantGRPCAddr: defaultLocalGRPCAddr,
 		},
 		{
-			name:     "explicit absolute path wins as UDS",
-			inPod:    false,
-			opts:     options{address: "/tmp/custom.sock"},
-			wantNet:  "unix",
-			wantAddr: "/tmp/custom.sock",
+			name:         "explicit absolute paths win as UDS",
+			inPod:        false,
+			opts:         options{httpAddress: "/tmp/custom-http.sock", grpcAddress: "/tmp/custom-grpc.sock"},
+			wantHTTPNet:  "unix",
+			wantHTTPAddr: "/tmp/custom-http.sock",
+			wantGRPCNet:  "unix",
+			wantGRPCAddr: "/tmp/custom-grpc.sock",
 		},
 		{
-			name:     "explicit host:port wins as TCP even inside pod",
-			inPod:    true,
-			opts:     options{address: "0.0.0.0:9999"},
-			wantNet:  "tcp",
-			wantAddr: "0.0.0.0:9999",
+			name:         "explicit host:port wins as TCP even inside pod",
+			inPod:        true,
+			opts:         options{httpAddress: "0.0.0.0:9998", grpcAddress: "0.0.0.0:9999"},
+			wantHTTPNet:  "tcp",
+			wantHTTPAddr: "0.0.0.0:9998",
+			wantGRPCNet:  "tcp",
+			wantGRPCAddr: "0.0.0.0:9999",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prev := listenMode
-			listenMode = func() bool { return tt.inPod }
-			defer func() { listenMode = prev }()
+			prev := inCluster
+			inCluster = func() bool { return tt.inPod }
+			defer func() { inCluster = prev }()
 
-			got := resolveListener(tt.opts)
-			if got.network != tt.wantNet || got.address != tt.wantAddr {
-				t.Errorf("resolveListener = (%s, %s), want (%s, %s)",
-					got.network, got.address, tt.wantNet, tt.wantAddr)
+			gotHTTP, gotGRPC := resolveListeners(tt.opts)
+			if gotHTTP.network != tt.wantHTTPNet || gotHTTP.address != tt.wantHTTPAddr {
+				t.Errorf("http = (%s, %s), want (%s, %s)",
+					gotHTTP.network, gotHTTP.address, tt.wantHTTPNet, tt.wantHTTPAddr)
+			}
+			if gotGRPC.network != tt.wantGRPCNet || gotGRPC.address != tt.wantGRPCAddr {
+				t.Errorf("grpc = (%s, %s), want (%s, %s)",
+					gotGRPC.network, gotGRPC.address, tt.wantGRPCNet, tt.wantGRPCAddr)
 			}
 		})
 	}
