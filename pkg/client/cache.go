@@ -25,7 +25,7 @@ import (
 
 // clientCacheEntry holds the lazily-built client for one peer name, plus
 // the sync.Once guarding its construction so concurrent first-callers
-// block on a single NewForPeer instead of racing.
+// block on a single newForPeer instead of racing.
 type clientCacheEntry struct {
 	once   sync.Once
 	client *a2aclient.Client
@@ -41,14 +41,13 @@ var (
 )
 
 // PeerClient returns the cached a2aclient.Client for the named peer,
-// building it via NewForPeer on first use and reusing it on every
+// building it via newForPeer on first use and reusing it on every
 // subsequent call for the same peer name. Construction is safe under
 // concurrent first-use of the same peer: only one caller builds the
 // client, and the rest block until it is ready.
 //
 // opts are only applied the first time the peer's client is built; they
-// are ignored on cache hits. Callers that need per-call options should
-// use NewForPeer directly instead of PeerClient.
+// are ignored on cache hits.
 func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
 	peerClientsMu.Lock()
 	entry, ok := peerClients[name]
@@ -59,7 +58,7 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 	peerClientsMu.Unlock()
 
 	entry.once.Do(func() {
-		entry.client, entry.err = NewForPeer(ctx, name, opts...)
+		entry.client, entry.err = newForPeer(ctx, name, opts...)
 	})
 	if entry.err != nil {
 		// Don't let a failed build (e.g. transient card-resolve error)

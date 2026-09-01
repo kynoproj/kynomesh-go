@@ -44,7 +44,7 @@ var corpus = map[string][]string{
 	},
 	"go": {
 		"The Kynomesh Go SDK lives at github.com/kynoproj/kynomesh-go.",
-		"`server.Start` and `client.NewForPeer` are the two main entry points.",
+		"`server.Start` and `client.PeerClient` are the two main entry points.",
 	},
 }
 

@@ -11,7 +11,7 @@ actually look like in code?**
 The coordinator's `Execute` handler is the whole point of the example:
 
 ```go
-peer, err := client.NewForPeer(ctx, "searcher")
+peer, err := client.PeerClient(ctx, "searcher")
 // ...
 resp, err := peer.SendMessage(ctx, &a2a.SendMessageRequest{Message: ...})
 ```
@@ -33,7 +33,7 @@ in its own package:
 
 [`main.go`](main.go) is just the entry point that reads `-role` and wires up the
 right `Executor` and `Card()`. Open `coordinator/coordinator.go` first — that's
-where `client.NewForPeer(ctx, "searcher")` happens.
+where `client.PeerClient(ctx, "searcher")` happens.
 
 ## The AgentSet
 
@@ -58,7 +58,7 @@ spec:
         args: ["-role", "searcher"]
 ```
 
-`pattern: Supervisor` is what makes `client.NewForPeer(ctx, "searcher")` work
+`pattern: Supervisor` is what makes `client.PeerClient(ctx, "searcher")` work
 from the coordinator. Change the pattern to `Handoff` and every agent sees every
 other agent; change it to `Sequential` and each agent sees only the next one in
 declaration order. The agent code doesn't change — the topology does.

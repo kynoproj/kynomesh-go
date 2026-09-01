@@ -126,22 +126,22 @@ func TestResolveAgentCardUnknownPeer(t *testing.T) {
 	}
 }
 
-func TestNewForPeerReturnsUsableClient(t *testing.T) {
+func TestNewForPeerInternalReturnsUsableClient(t *testing.T) {
 	srv := fakeAgent(t, "worker-a")
 	writeTopologyWithURL(t, "worker-a", srv.URL)
 
-	c, err := NewForPeer(context.Background(), "worker-a")
+	c, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
-		t.Fatalf("NewForPeer: %v", err)
+		t.Fatalf("newForPeer: %v", err)
 	}
 	if c == nil {
 		t.Fatal("client is nil")
 	}
 }
 
-func TestNewForPeerPropagatesPeerNotFound(t *testing.T) {
+func TestNewForPeerInternalPropagatesPeerNotFound(t *testing.T) {
 	writeTopologyWithURL(t, "worker-a", "http://example.invalid")
-	_, err := NewForPeer(context.Background(), "worker-b")
+	_, err := newForPeer(context.Background(), "worker-b")
 	if !errors.Is(err, ErrPeerNotFound) {
 		t.Errorf("err = %v, want ErrPeerNotFound", err)
 	}
@@ -150,13 +150,13 @@ func TestNewForPeerPropagatesPeerNotFound(t *testing.T) {
 // Managed peers get a default gRPC transport (TLS with verification
 // skipped) so building a client against a card that only advertises
 // gRPC succeeds without the caller passing any transport options.
-func TestNewForPeerManagedDefaultsGRPC(t *testing.T) {
+func TestNewForPeerInternalManagedDefaultsGRPC(t *testing.T) {
 	srv := fakeAgent(t, "worker-a", a2a.TransportProtocolGRPC)
 	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
 
-	c, err := NewForPeer(context.Background(), "worker-a")
+	c, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
-		t.Fatalf("NewForPeer: %v", err)
+		t.Fatalf("newForPeer: %v", err)
 	}
 	if c == nil {
 		t.Fatal("client is nil")
@@ -167,11 +167,11 @@ func TestNewForPeerManagedDefaultsGRPC(t *testing.T) {
 // supply one, building a client against a gRPC-only card must fail.
 // This guards against silently sending unauthenticated traffic outside
 // the cluster.
-func TestNewForPeerExternalNoDefaultTransport(t *testing.T) {
+func TestNewForPeerInternalExternalNoDefaultTransport(t *testing.T) {
 	srv := fakeAgent(t, "third-party", a2a.TransportProtocolGRPC)
 	writeTopologyWithKind(t, "third-party", "External", srv.URL)
 
-	if _, err := NewForPeer(context.Background(), "third-party"); err == nil {
+	if _, err := newForPeer(context.Background(), "third-party"); err == nil {
 		t.Error("expected error for External peer with no transport options supplied")
 	}
 }
@@ -205,13 +205,13 @@ func TestResolveAgentCardExternalVerifiesTLS(t *testing.T) {
 
 // Managed peers build a working client even when the card is served
 // over HTTPS with a self-signed cert.
-func TestNewForPeerManagedSkipsTLSVerify(t *testing.T) {
+func TestNewForPeerInternalManagedSkipsTLSVerify(t *testing.T) {
 	srv := fakeAgentTLS(t, "worker-a")
 	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
 
-	c, err := NewForPeer(context.Background(), "worker-a")
+	c, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
-		t.Fatalf("NewForPeer: %v", err)
+		t.Fatalf("newForPeer: %v", err)
 	}
 	if c == nil {
 		t.Fatal("client is nil")

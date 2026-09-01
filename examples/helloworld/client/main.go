@@ -39,8 +39,9 @@ func main() {
 	ctx := context.Background()
 
 	// Look up the peer's URL, fetch its AgentCard, and build an
-	// a2a client over one of its advertised transports.
-	c, err := client.NewForPeer(ctx, *peerName)
+	// a2a client over one of its advertised transports. Cached
+	// per-process, so a later call for the same peer reuses it.
+	c, err := client.PeerClient(ctx, *peerName)
 	if err != nil {
 		log.Fatalf("Failed to create a client for peer %q: %v", *peerName, err)
 	}

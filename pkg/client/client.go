@@ -21,10 +21,9 @@ limitations under the License.
 // This package wraps that file so user code does not need to know its
 // path or format:
 //
-//	url, err := client.PeerURL("worker-a")         // just the URL
+//	url, err := client.PeerURL("worker-a")        // just the URL
 //	card, err := client.ResolveAgentCard(ctx, "worker-a")
-//	c, err := client.NewForPeer(ctx, "worker-a")   // ready-to-use a2a client, built fresh every call
-//	c, err := client.PeerClient(ctx, "worker-a")   // same, but cached per-process per peer name
+//	c, err := client.PeerClient(ctx, "worker-a")  // ready-to-use a2a client, cached per-process per peer name
 package client
 
 import (
@@ -108,11 +107,16 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 	return card, nil
 }
 
-// NewForPeer returns an a2aclient.Client wired to the named peer. It
+// newForPeer returns an a2aclient.Client wired to the named peer. It
 // performs the full peer-discovery flow: look up the peer URL in the
 // topology, resolve its AgentCard, and construct a client over one of
 // the interfaces the card advertises.
-func NewForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
+//
+// Unexported: this always builds a fresh client (a full AgentCard
+// resolve + construction), never reuses a cached one, and its result
+// never gets recorded for AgentCard drift tracking. PeerClient is the
+// public, cached entry point built on top of this.
+func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
 		return nil, err
