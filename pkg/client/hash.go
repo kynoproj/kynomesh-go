@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 )
 
 // envPodName mirrors pkg/server's in-pod signal: set by the Kynomesh
@@ -57,15 +58,20 @@ var peerHashesInit sync.Once
 var peerHashesMu sync.Mutex
 
 // hashAgentCard returns the hex-encoded SHA-256 digest of card's JSON
-// encoding. a2a.AgentCard is a struct (not a map), so encoding/json
-// serializes its fields in a fixed, declaration order — the same card
-// content always hashes the same way.
+// encoding, canonicalized per JCS (RFC 8785) before hashing.
+//
+// Using JSC because the hash should be consistent across different
+// languages.
 func hashAgentCard(card *a2a.AgentCard) (string, error) {
 	data, err := json.Marshal(card)
 	if err != nil {
 		return "", fmt.Errorf("encode agent card: %w", err)
 	}
-	sum := sha256.Sum256(data)
+	canonical, err := jsoncanonicalizer.Transform(data)
+	if err != nil {
+		return "", fmt.Errorf("canonicalize agent card: %w", err)
+	}
+	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:]), nil
 }
 

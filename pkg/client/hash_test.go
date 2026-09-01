@@ -18,11 +18,13 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 )
 
 // useTempPeerHashesPath points peerHashesPath at a fresh file under
@@ -188,6 +190,38 @@ func TestHashAgentCardDeterministic(t *testing.T) {
 	}
 	if h1 == h3 {
 		t.Errorf("hash unchanged despite different card content")
+	}
+}
+
+// TestCanonicalizeKeyOrderIndependent pins the property JCS
+// canonicalization exists to provide: two JSON encodings of the same
+// logical document that differ only in key order (e.g. as another
+// SDK's marshaler might produce for the same AgentCard) canonicalize
+// to identical bytes, and therefore hash identically. Go's own
+// json.Marshal on a struct always emits fields in declaration order,
+// so this can't be demonstrated through hashAgentCard/a2a.AgentCard
+// directly — it exercises the canonicalizer on hand-written JSON with
+// deliberately different key orders instead.
+func TestCanonicalizeKeyOrderIndependent(t *testing.T) {
+	inOrder := []byte(`{"name":"worker-a","version":"0.0.1"}`)
+	reordered := []byte(`{"version":"0.0.1","name":"worker-a"}`)
+
+	c1, err := jsoncanonicalizer.Transform(inOrder)
+	if err != nil {
+		t.Fatalf("Transform inOrder: %v", err)
+	}
+	c2, err := jsoncanonicalizer.Transform(reordered)
+	if err != nil {
+		t.Fatalf("Transform reordered: %v", err)
+	}
+	if string(c1) != string(c2) {
+		t.Errorf("canonical1 = %q, canonical2 = %q, want equal for same content in different key order", c1, c2)
+	}
+
+	sum1 := sha256.Sum256(c1)
+	sum2 := sha256.Sum256(c2)
+	if sum1 != sum2 {
+		t.Errorf("hash differs despite canonical bytes matching")
 	}
 }
 
