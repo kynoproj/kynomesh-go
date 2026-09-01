@@ -107,19 +107,21 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 	return card, nil
 }
 
-// newForPeer returns an a2aclient.Client wired to the named peer. It
-// performs the full peer-discovery flow: look up the peer URL in the
-// topology, resolve its AgentCard, and construct a client over one of
-// the interfaces the card advertises.
+// newForPeer returns an a2aclient.Client wired to the named peer, along
+// with the AgentCard it was built from. It performs the full
+// peer-discovery flow: look up the peer URL in the topology, resolve
+// its AgentCard, and construct a client over one of the interfaces the
+// card advertises.
 //
 // Unexported: this always builds a fresh client (a full AgentCard
-// resolve + construction), never reuses a cached one, and its result
-// never gets recorded for AgentCard drift tracking. PeerClient is the
-// public, cached entry point built on top of this.
-func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
+// resolve + construction), never reuses a cached one. PeerClient is the
+// public, cached entry point built on top of this; it is also the only
+// caller, since only a cached client's card is worth recording for
+// AgentCard drift tracking.
+func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resolver := agentcard.DefaultResolver
 	if p.isManaged() {
@@ -127,7 +129,7 @@ func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 	}
 	card, err := resolver.Resolve(ctx, p.URL)
 	if err != nil {
-		return nil, fmt.Errorf("resolve agent card for %q at %s: %w", name, p.URL, err)
+		return nil, nil, fmt.Errorf("resolve agent card for %q at %s: %w", name, p.URL, err)
 	}
 
 	if p.isManaged() {
@@ -143,7 +145,7 @@ func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 
 	c, err := a2aclient.NewFromCard(ctx, card, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("create a2a client for %q: %w", name, err)
+		return nil, nil, fmt.Errorf("create a2a client for %q: %w", name, err)
 	}
-	return c, nil
+	return c, card, nil
 }

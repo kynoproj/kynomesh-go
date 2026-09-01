@@ -276,6 +276,14 @@ next call (e.g. after the peer's AgentCard changes):
 client.ForgetPeer("worker-a")
 ```
 
+Each time `PeerClient` builds a peer's client for the first time in-pod, it
+also records a hash of that peer's resolved AgentCard to a well-known file on
+the shared Kynomesh volume (a no-op in local dev, where there is no broker to
+read it). This is how the broker/daemon/controller detect
+[AgentCard drift](https://github.com/kynoproj/kynomesh/blob/main/docs/development/specifications/agentcard-drift-reload.md) —
+whether a live peer's capabilities have changed since this process cached its
+client — and is not something agent code needs to interact with directly.
+
 Lower-level helpers when you don't want the full client:
 
 ```go
