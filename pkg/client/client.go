@@ -114,10 +114,7 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 // card advertises.
 //
 // Unexported: this always builds a fresh client (a full AgentCard
-// resolve + construction), never reuses a cached one. PeerClient is the
-// public, cached entry point built on top of this; it is also the only
-// caller, since only a cached client's card is worth recording for
-// AgentCard drift tracking.
+// resolve + construction).
 func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
