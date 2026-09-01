@@ -40,7 +40,7 @@ func main() {
 
 	// Look up the peer's URL, fetch its AgentCard, and build an
 	// a2a client over one of its advertised transports.
-	c, err := client.NewForPeer(ctx, *peerName)
+	c, err := client.PeerClient(ctx, *peerName)
 	if err != nil {
 		log.Fatalf("Failed to create a client for peer %q: %v", *peerName, err)
 	}

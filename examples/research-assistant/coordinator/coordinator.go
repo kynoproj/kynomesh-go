@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package coordinator implements the entry agent in the
 // research-assistant example. It receives a research question and
-// forwards it to the searcher peer using client.NewForPeer, then
+// forwards it to the searcher peer using client.PeerClient, then
 // returns the combined reply.
 package coordinator
 
@@ -47,7 +47,7 @@ func (*Executor) Execute(ctx context.Context, ec *a2asrv.ExecutorContext) iter.S
 		// build an A2A client. The whole upstream
 		// agentcard.Resolve + a2aclient.NewFromCard flow collapses into
 		// this one call.
-		peer, err := client.NewForPeer(ctx, searcherPeer)
+		peer, err := client.PeerClient(ctx, searcherPeer)
 		if err != nil {
 			yield(nil, fmt.Errorf("dial peer %q: %w", searcherPeer, err))
 			return

@@ -26,7 +26,7 @@ comes straight from `a2a-go`. This SDK does not wrap or replace those types.
 
 | `a2aproject/a2a-go`                                                     | `kynoproj/kynomesh-go`                                  |
 | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `agentcard.DefaultResolver.Resolve(ctx, url)` + `a2aclient.NewFromCard` | `client.NewForPeer(ctx, peerName)`                      |
+| `agentcard.DefaultResolver.Resolve(ctx, url)` + `a2aclient.NewFromCard` | `client.PeerClient(ctx, peerName)`                      |
 | Caller hardcodes peer URLs or reads them from config                    | Peers are discovered by name                            |
 | Caller picks the listener address                                       | `server.Start` picks the right listener for the runtime |
 | Caller advertises the agent to peers                                    | Handled by `server.Start`                               |
@@ -226,8 +226,11 @@ delays the next status update.
 ## Client: call a peer agent
 
 Within an `AgentSet`, every agent has a set of peers it is allowed to call,
-derived from the AgentSet's routing pattern. `client.NewForPeer` collapses the
-whole upstream `agentcard.Resolve` + `a2aclient.NewFromCard` flow into one call:
+derived from the AgentSet's routing pattern. `client.PeerClient` collapses the
+whole upstream `agentcard.Resolve` + `a2aclient.NewFromCard` flow into one call,
+and caches the result: a peer's client is built at most once per process and
+reused on every later call for that peer name, including under concurrent first
+use.
 
 ```go
 package main
@@ -245,11 +248,12 @@ func main() {
     ctx := context.Background()
 
     // Discover the peer, fetch its AgentCard, and build an a2a
-    // client. For Managed peer agents, when the gRPC transport is
-    // used, NewForPeer registers a gRPC transport that uses TLS
-    // for encryption but skips certificate verification. Pass
-    // a2agrpc.WithGRPCTransport(...) to override.
-    c, err := client.NewForPeer(ctx, "worker-a")
+    // client — once per process per peer name; later calls for the
+    // same peer reuse the cached client. For Managed peer agents,
+    // when the gRPC transport is used, PeerClient registers a gRPC
+    // transport that uses TLS for encryption but skips certificate
+    // verification. Pass a2agrpc.WithGRPCTransport(...) to override.
+    c, err := client.PeerClient(ctx, "worker-a")
     if err != nil {
         log.Fatalf("create client: %v", err)
     }
@@ -261,6 +265,15 @@ func main() {
     }
     log.Printf("response: %+v", resp)
 }
+```
+
+`PeerClient` is lazy — a peer never gets a client built or its AgentCard
+resolved until the first call for that peer name — and options are only applied
+on that first build. To drop a peer's cached client and force a rebuild on the
+next call (e.g. after the peer's AgentCard changes):
+
+```go
+client.ForgetPeer("worker-a")
 ```
 
 Lower-level helpers when you don't want the full client:
@@ -283,7 +296,7 @@ Full example: [examples/helloworld/client](examples/helloworld/client).
 
 ## Resources
 
-- [Kynomesh project](https://github.com/kynoproj/kynomesh)
+- [Kynomesh](https://github.com/kynoproj/kynomesh)
 - [Core concepts](https://github.com/kynoproj/kynomesh/blob/main/docs/core-concepts/overview.md)
 - [A2A protocol](https://a2a-protocol.org/)
 - [a2aproject/a2a-go](https://github.com/a2aproject/a2a-go)
