@@ -21,9 +21,10 @@ limitations under the License.
 // This package wraps that file so user code does not need to know its
 // path or format:
 //
-//	url, err := client.PeerURL("worker-a")        // just the URL
+//	url, err := client.PeerURL("worker-a")         // just the URL
 //	card, err := client.ResolveAgentCard(ctx, "worker-a")
-//	c, err := client.NewForPeer(ctx, "worker-a")  // ready-to-use a2a client
+//	c, err := client.NewForPeer(ctx, "worker-a")   // ready-to-use a2a client, built fresh every call
+//	c, err := client.PeerClient(ctx, "worker-a")   // same, but cached per-process per peer name
 package client
 
 import (

@@ -24,12 +24,12 @@ comes straight from `a2a-go`. This SDK does not wrap or replace those types.
 
 ## Relationship to the A2A Go SDK
 
-| `a2aproject/a2a-go`                                                     | `kynoproj/kynomesh-go`                                  |
-| ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `agentcard.DefaultResolver.Resolve(ctx, url)` + `a2aclient.NewFromCard` | `client.NewForPeer(ctx, peerName)`                      |
-| Caller hardcodes peer URLs or reads them from config                    | Peers are discovered by name                            |
-| Caller picks the listener address                                       | `server.Start` picks the right listener for the runtime |
-| Caller advertises the agent to peers                                    | Handled by `server.Start`                               |
+| `a2aproject/a2a-go`                                                     | `kynoproj/kynomesh-go`                                                  |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `agentcard.DefaultResolver.Resolve(ctx, url)` + `a2aclient.NewFromCard` | `client.NewForPeer(ctx, peerName)` / `client.PeerClient(ctx, peerName)` |
+| Caller hardcodes peer URLs or reads them from config                    | Peers are discovered by name                                            |
+| Caller picks the listener address                                       | `server.Start` picks the right listener for the runtime                 |
+| Caller advertises the agent to peers                                    | Handled by `server.Start`                                               |
 
 You can drop down to the upstream SDK at any time — `pkg/client` accepts
 `a2aclient.FactoryOption...` so anything that works with `NewFromCard` works
@@ -229,6 +229,12 @@ Within an `AgentSet`, every agent has a set of peers it is allowed to call,
 derived from the AgentSet's routing pattern. `client.NewForPeer` collapses the
 whole upstream `agentcard.Resolve` + `a2aclient.NewFromCard` flow into one call:
 
+`NewForPeer` builds a fresh client — and re-resolves the peer's AgentCard — on
+every call. For code that calls the same peer repeatedly (e.g. a request
+handler), use `client.PeerClient` instead: it builds a peer's client at most
+once per process and reuses it on every later call, including under concurrent
+first use.
+
 ```go
 package main
 
@@ -261,6 +267,22 @@ func main() {
     }
     log.Printf("response: %+v", resp)
 }
+```
+
+To reuse a peer's client across calls instead of rebuilding it every time, swap
+`NewForPeer` for `PeerClient`:
+
+```go
+c, err := client.PeerClient(ctx, "worker-a")
+```
+
+`PeerClient` is lazy — a peer never gets a client built or its AgentCard
+resolved until the first call for that peer name — and options are only applied
+on that first build. To drop a peer's cached client and force a rebuild on the
+next call (e.g. after the peer's AgentCard changes):
+
+```go
+client.ForgetPeer("worker-a")
 ```
 
 Lower-level helpers when you don't want the full client:
