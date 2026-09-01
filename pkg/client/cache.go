@@ -64,7 +64,7 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 		if entry.err == nil {
 			// Best-effort: a failure to record the hash must not fail
 			// the build the caller actually asked for.
-			_ = recordPeerCardHash(name, card)
+			_ = recordPeerHash(name, card)
 		}
 	})
 	if entry.err != nil {

@@ -25,25 +25,25 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2a"
 )
 
-// useTempPeerCardHashesPath points peerCardHashesPath at a fresh file
-// under t.TempDir() and restores it (and the clear-once guard) on
-// cleanup, so tests don't observe each other's recorded hashes.
-func useTempPeerCardHashesPath(t *testing.T) string {
+// useTempPeerHashesPath points peerHashesPath at a fresh file under
+// t.TempDir() and restores it (and the clear-once guard) on cleanup,
+// so tests don't observe each other's recorded hashes.
+func useTempPeerHashesPath(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "peer-card-hashes.json")
-	prev := peerCardHashesPath
-	peerCardHashesPath = path
-	resetPeerCardHashesState()
+	path := filepath.Join(t.TempDir(), "peer-hashes.json")
+	prev := peerHashesPath
+	peerHashesPath = path
+	resetPeerHashesState()
 	t.Cleanup(func() {
-		peerCardHashesPath = prev
-		resetPeerCardHashesState()
+		peerHashesPath = prev
+		resetPeerHashesState()
 	})
 	return path
 }
 
 // fakeInCluster makes inCluster() report true for the duration of the
-// test, so recordPeerCardHash doesn't no-op as it would in real local
-// dev (where these tests actually run).
+// test, so recordPeerHash doesn't no-op as it would in real local dev
+// (where these tests actually run).
 func fakeInCluster(t *testing.T) {
 	t.Helper()
 	prev := inCluster
@@ -53,17 +53,17 @@ func fakeInCluster(t *testing.T) {
 
 func readRecordedHashes(t *testing.T, path string) map[string]string {
 	t.Helper()
-	hashes, err := readPeerCardHashes(path)
+	hashes, err := readPeerHashes(path)
 	if err != nil {
-		t.Fatalf("readPeerCardHashes: %v", err)
+		t.Fatalf("readPeerHashes: %v", err)
 	}
 	return hashes
 }
 
-func TestPeerClientRecordsCardHashOnFirstBuild(t *testing.T) {
+func TestPeerClientRecordsHashOnFirstBuild(t *testing.T) {
 	resetCacheBetweenTests(t)
 	fakeInCluster(t)
-	path := useTempPeerCardHashesPath(t)
+	path := useTempPeerHashesPath(t)
 
 	var hits int64
 	srv := countingAgent(t, "worker-a", &hits)
@@ -82,7 +82,7 @@ func TestPeerClientRecordsCardHashOnFirstBuild(t *testing.T) {
 func TestPeerClientDoesNotRecordHashForUncalledPeer(t *testing.T) {
 	resetCacheBetweenTests(t)
 	fakeInCluster(t)
-	path := useTempPeerCardHashesPath(t)
+	path := useTempPeerHashesPath(t)
 
 	var hits int64
 	srv := countingAgent(t, "worker-a", &hits)
@@ -98,10 +98,10 @@ func TestPeerClientDoesNotRecordHashForUncalledPeer(t *testing.T) {
 func TestPeerClientHashFileClearedOnFirstUseOfProcess(t *testing.T) {
 	resetCacheBetweenTests(t)
 	fakeInCluster(t)
-	path := useTempPeerCardHashesPath(t)
+	path := useTempPeerHashesPath(t)
 
 	// Simulate a stale file left by a previous process incarnation.
-	if err := writePeerCardHashes(path, map[string]string{"stale-peer": "deadbeef"}); err != nil {
+	if err := writePeerHashes(path, map[string]string{"stale-peer": "deadbeef"}); err != nil {
 		t.Fatalf("seed stale hashes: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestPeerClientHashFileClearedOnFirstUseOfProcess(t *testing.T) {
 func TestPeerClientHashFileAccumulatesAcrossPeers(t *testing.T) {
 	resetCacheBetweenTests(t)
 	fakeInCluster(t)
-	path := useTempPeerCardHashesPath(t)
+	path := useTempPeerHashesPath(t)
 
 	var hitsA, hitsB int64
 	srvA := countingAgent(t, "worker-a", &hitsA)
@@ -152,7 +152,7 @@ func TestPeerClientDoesNotWriteHashFileOutsidePod(t *testing.T) {
 	resetCacheBetweenTests(t)
 	// Deliberately no fakeInCluster(t): local dev / non-pod is the
 	// default in these tests, same as it is for a real local run.
-	path := useTempPeerCardHashesPath(t)
+	path := useTempPeerHashesPath(t)
 
 	var hits int64
 	srv := countingAgent(t, "worker-a", &hits)
@@ -163,7 +163,7 @@ func TestPeerClientDoesNotWriteHashFileOutsidePod(t *testing.T) {
 	}
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("peer-card-hashes file exists outside a pod, want no file (err=%v)", err)
+		t.Errorf("peer-hashes file exists outside a pod, want no file (err=%v)", err)
 	}
 }
 
