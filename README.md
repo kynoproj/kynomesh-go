@@ -296,7 +296,7 @@ Full example: [examples/helloworld/client](examples/helloworld/client).
 
 ## Resources
 
-- [Kynomesh project](https://github.com/kynoproj/kynomesh)
+- [Kynomesh](https://github.com/kynoproj/kynomesh)
 - [Core concepts](https://github.com/kynoproj/kynomesh/blob/main/docs/core-concepts/overview.md)
 - [A2A protocol](https://a2a-protocol.org/)
 - [a2aproject/a2a-go](https://github.com/a2aproject/a2a-go)
