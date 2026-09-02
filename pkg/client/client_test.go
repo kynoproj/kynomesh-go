@@ -130,7 +130,7 @@ func TestNewForPeerInternalReturnsUsableClient(t *testing.T) {
 	srv := fakeAgent(t, "worker-a")
 	writeTopologyWithURL(t, "worker-a", srv.URL)
 
-	c, err := newForPeer(context.Background(), "worker-a")
+	c, _, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
 		t.Fatalf("newForPeer: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestNewForPeerInternalReturnsUsableClient(t *testing.T) {
 
 func TestNewForPeerInternalPropagatesPeerNotFound(t *testing.T) {
 	writeTopologyWithURL(t, "worker-a", "http://example.invalid")
-	_, err := newForPeer(context.Background(), "worker-b")
+	_, _, err := newForPeer(context.Background(), "worker-b")
 	if !errors.Is(err, ErrPeerNotFound) {
 		t.Errorf("err = %v, want ErrPeerNotFound", err)
 	}
@@ -154,7 +154,7 @@ func TestNewForPeerInternalManagedDefaultsGRPC(t *testing.T) {
 	srv := fakeAgent(t, "worker-a", a2a.TransportProtocolGRPC)
 	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
 
-	c, err := newForPeer(context.Background(), "worker-a")
+	c, _, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
 		t.Fatalf("newForPeer: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestNewForPeerInternalExternalNoDefaultTransport(t *testing.T) {
 	srv := fakeAgent(t, "third-party", a2a.TransportProtocolGRPC)
 	writeTopologyWithKind(t, "third-party", "External", srv.URL)
 
-	if _, err := newForPeer(context.Background(), "third-party"); err == nil {
+	if _, _, err := newForPeer(context.Background(), "third-party"); err == nil {
 		t.Error("expected error for External peer with no transport options supplied")
 	}
 }
@@ -209,7 +209,7 @@ func TestNewForPeerInternalManagedSkipsTLSVerify(t *testing.T) {
 	srv := fakeAgentTLS(t, "worker-a")
 	writeTopologyWithKind(t, "worker-a", "Managed", srv.URL)
 
-	c, err := newForPeer(context.Background(), "worker-a")
+	c, _, err := newForPeer(context.Background(), "worker-a")
 	if err != nil {
 		t.Fatalf("newForPeer: %v", err)
 	}

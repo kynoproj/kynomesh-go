@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
 )
 
@@ -58,7 +59,13 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 	peerClientsMu.Unlock()
 
 	entry.once.Do(func() {
-		entry.client, entry.err = newForPeer(ctx, name, opts...)
+		var card *a2a.AgentCard
+		entry.client, card, entry.err = newForPeer(ctx, name, opts...)
+		if entry.err == nil {
+			// Best-effort: a failure to record the hash must not fail
+			// the build the caller actually asked for.
+			_ = recordPeerHash(name, card)
+		}
 	})
 	if entry.err != nil {
 		// Don't let a failed build (e.g. transient card-resolve error)
