@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
@@ -53,7 +54,7 @@ func fakeInCluster(t *testing.T) {
 	t.Cleanup(func() { inCluster = prev })
 }
 
-func readRecordedHashes(t *testing.T, path string) map[string]string {
+func readRecordedHashes(t *testing.T, path string) map[string]peerHashEntry {
 	t.Helper()
 	hashes, err := readPeerHashes(path)
 	if err != nil {
@@ -76,8 +77,15 @@ func TestPeerClientRecordsHashOnFirstBuild(t *testing.T) {
 	}
 
 	hashes := readRecordedHashes(t, path)
-	if _, ok := hashes["worker-a"]; !ok {
+	entry, ok := hashes["worker-a"]
+	if !ok {
 		t.Errorf("hashes = %v, want an entry for worker-a", hashes)
+	}
+	if entry.Hash == "" {
+		t.Errorf("entry.Hash is empty, want a non-empty hash")
+	}
+	if entry.ObservedAt.IsZero() {
+		t.Errorf("entry.ObservedAt is zero, want the time the client was resolved")
 	}
 }
 
@@ -103,7 +111,7 @@ func TestPeerClientHashFileClearedOnFirstUseOfProcess(t *testing.T) {
 	path := useTempPeerHashesPath(t)
 
 	// Simulate a stale file left by a previous process incarnation.
-	if err := writePeerHashes(path, map[string]string{"stale-peer": "deadbeef"}); err != nil {
+	if err := writePeerHashes(path, map[string]peerHashEntry{"stale-peer": {Hash: "deadbeef", ObservedAt: time.Now()}}); err != nil {
 		t.Fatalf("seed stale hashes: %v", err)
 	}
 

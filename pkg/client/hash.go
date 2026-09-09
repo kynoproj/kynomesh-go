@@ -24,10 +24,20 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 )
+
+// peerHashEntry is the per-peer value recorded in the peer-hashes file.
+type peerHashEntry struct {
+	Hash       string    `json:"hash"`
+	ObservedAt time.Time `json:"observedAt"`
+}
+
+// now is a test seam wrapping time.Now.
+var now = time.Now
 
 // envPodName mirrors pkg/server's in-pod signal: set by the Kynomesh
 // pod spec, absent in local dev.
@@ -92,6 +102,7 @@ func recordPeerHash(name string, card *a2a.AgentCard) error {
 	if err != nil {
 		return err
 	}
+	observedAt := now()
 
 	peerHashesInit.Do(func() {
 		_ = os.Remove(peerHashesPath)
@@ -104,21 +115,21 @@ func recordPeerHash(name string, card *a2a.AgentCard) error {
 	if err != nil {
 		return err
 	}
-	hashes[name] = hash
+	hashes[name] = peerHashEntry{Hash: hash, ObservedAt: observedAt}
 	return writePeerHashes(peerHashesPath, hashes)
 }
 
-// readPeerHashes returns the current peer name -> hash map, or an
+// readPeerHashes returns the current peer name -> entry map, or an
 // empty map if the file does not exist yet.
-func readPeerHashes(path string) (map[string]string, error) {
+func readPeerHashes(path string) (map[string]peerHashEntry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]string{}, nil
+			return map[string]peerHashEntry{}, nil
 		}
 		return nil, fmt.Errorf("read peer hashes %q: %w", path, err)
 	}
-	hashes := map[string]string{}
+	hashes := map[string]peerHashEntry{}
 	if err := json.Unmarshal(raw, &hashes); err != nil {
 		return nil, fmt.Errorf("decode peer hashes %q: %w", path, err)
 	}
@@ -128,7 +139,7 @@ func readPeerHashes(path string) (map[string]string, error) {
 // writePeerHashes serializes hashes as JSON and writes it atomically to
 // path, so a concurrent reader (the broker) never observes a
 // half-written file.
-func writePeerHashes(path string, hashes map[string]string) error {
+func writePeerHashes(path string, hashes map[string]peerHashEntry) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create peer hashes dir: %w", err)
 	}
