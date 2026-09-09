@@ -30,10 +30,7 @@ import (
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 )
 
-// peerHashEntry is the per-peer value recorded in the peer-hashes file:
-// the AgentCard hash plus the moment it was observed (the same instant
-// the peer client was first built), so a consumer (e.g. the broker) can
-// tell a freshly-resolved peer from one stuck on a stale card.
+// peerHashEntry is the per-peer value recorded in the peer-hashes file.
 type peerHashEntry struct {
 	Hash       string    `json:"hash"`
 	ObservedAt time.Time `json:"observedAt"`
