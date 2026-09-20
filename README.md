@@ -105,6 +105,36 @@ What `server.Start` does for you:
 
 Full example: [examples/helloworld/server](examples/helloworld/server).
 
+### Exposing multiple transports
+
+List every transport you want callers to be able to use in `SupportedInterfaces`
+— most agents only need one, but you can advertise more than one and let each
+caller pick:
+
+| Transport        | Go constant                     |
+| ---------------- | ------------------------------- |
+| JSON-RPC         | `a2a.TransportProtocolJSONRPC`  |
+| REST (HTTP+JSON) | `a2a.TransportProtocolHTTPJSON` |
+| gRPC             | `a2a.TransportProtocolGRPC`     |
+
+```go
+card := &a2a.AgentCard{
+    Name:    "Hello World Agent",
+    Version: "0.0.1",
+    SupportedInterfaces: []*a2a.AgentInterface{
+        a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/jsonrpc", a2a.TransportProtocolJSONRPC),
+        a2a.NewAgentInterface("http://127.0.0.1:8088/a2a/rest", a2a.TransportProtocolHTTPJSON),
+        a2a.NewAgentInterface("127.0.0.1:8089", a2a.TransportProtocolGRPC),
+    },
+}
+```
+
+`server.Start` reads each interface's `ProtocolBinding` to decide which
+transports to mount, but the URLs here are only used for local development.
+Running in-cluster, Kynomesh's broker sidecar fronts your agent and advertises
+the reachable address to peers, so you don't need to construct those addresses
+yourself.
+
 ## Health checks
 
 `server.Start` always mounts two health endpoints, one per listener, so
