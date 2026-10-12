@@ -17,14 +17,17 @@ limitations under the License.
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
@@ -215,5 +218,78 @@ func TestNewForPeerInternalManagedSkipsTLSVerify(t *testing.T) {
 	}
 	if c == nil {
 		t.Fatal("client is nil")
+	}
+}
+
+func TestInsecureTLSPeersEnvSkipsVerifyForNamedExternalPeer(t *testing.T) {
+	srv := fakeAgentTLS(t, "calc")
+	writeTopologyWithKind(t, "calc", "External", srv.URL)
+	t.Setenv(InsecureTLSPeersEnv, "calc")
+
+	if _, err := ResolveAgentCard(context.Background(), "calc"); err != nil {
+		t.Fatalf("ResolveAgentCard: %v", err)
+	}
+	c, _, err := newForPeer(context.Background(), "calc")
+	if err != nil {
+		t.Fatalf("newForPeer: %v", err)
+	}
+	if c == nil {
+		t.Fatal("client is nil")
+	}
+}
+
+func TestInsecureTLSPeersEnvToleratesWhitespaceAndEmptyEntries(t *testing.T) {
+	for _, v := range []string{" calc , other ", "other,,calc", "calc,"} {
+		t.Run(v, func(t *testing.T) {
+			srv := fakeAgentTLS(t, "calc")
+			writeTopologyWithKind(t, "calc", "External", srv.URL)
+			t.Setenv(InsecureTLSPeersEnv, v)
+
+			if _, err := ResolveAgentCard(context.Background(), "calc"); err != nil {
+				t.Fatalf("ResolveAgentCard: %v", err)
+			}
+		})
+	}
+}
+
+func TestInsecureTLSPeersEnvDoesNotAffectUnnamedExternalPeer(t *testing.T) {
+	for _, v := range []string{"", "other", "calculator", "CALC"} {
+		t.Run(v, func(t *testing.T) {
+			srv := fakeAgentTLS(t, "calc")
+			writeTopologyWithKind(t, "calc", "External", srv.URL)
+			t.Setenv(InsecureTLSPeersEnv, v)
+
+			if _, err := ResolveAgentCard(context.Background(), "calc"); err == nil {
+				t.Error("expected TLS verification error for unnamed External peer")
+			}
+			if _, _, err := newForPeer(context.Background(), "calc"); err == nil {
+				t.Error("expected TLS verification error from newForPeer")
+			}
+		})
+	}
+}
+
+func TestInsecureTLSPeersEnvWarnsOnlyForExternalPeers(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	t.Setenv(InsecureTLSPeersEnv, "calc")
+
+	srv := fakeAgentTLS(t, "calc")
+	writeTopologyWithKind(t, "calc", "Managed", srv.URL)
+	if _, _, err := newForPeer(context.Background(), "calc"); err != nil {
+		t.Fatalf("newForPeer managed: %v", err)
+	}
+	if strings.Contains(buf.String(), "TLS verification disabled") {
+		t.Errorf("unexpected warning for Managed peer: %s", buf.String())
+	}
+
+	writeTopologyWithKind(t, "calc", "External", srv.URL)
+	if _, _, err := newForPeer(context.Background(), "calc"); err != nil {
+		t.Fatalf("newForPeer external: %v", err)
+	}
+	if !strings.Contains(buf.String(), "TLS verification disabled") {
+		t.Errorf("expected warning for External peer, got: %s", buf.String())
 	}
 }

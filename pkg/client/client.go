@@ -31,7 +31,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
@@ -61,6 +64,41 @@ var managedCardResolver = &agentcard.Resolver{
 	CardParser: agentcard.DefaultCardParser,
 }
 
+// InsecureTLSPeersEnv names the environment variable holding a
+// comma-separated list of External peers whose TLS certificate is not
+// verified.
+//
+// An External peer is normally expected to present a CA-verifiable
+// certificate. The exception is an agent in another AgentSet, referenced
+// via externalAgents: its broker presents a self-signed certificate,
+// which can never verify. Naming such a peer here gives it the same
+// treatment Managed peers get (encrypted, but the peer is not
+// authenticated). Managed peers need no entry.
+const InsecureTLSPeersEnv = "KYNOMESH_INSECURE_TLS_PEERS"
+
+// insecureTLSPeers parses InsecureTLSPeersEnv. Read on every call so it
+// can change at runtime.
+func insecureTLSPeers() map[string]struct{} {
+	names := map[string]struct{}{}
+	for _, n := range strings.Split(os.Getenv(InsecureTLSPeersEnv), ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			names[n] = struct{}{}
+		}
+	}
+	return names
+}
+
+// skipsTLSVerify reports whether TLS verification is skipped for the
+// peer: always for Managed peers, for External peers only when named in
+// InsecureTLSPeersEnv.
+func skipsTLSVerify(p peer) bool {
+	if p.isManaged() {
+		return true
+	}
+	_, ok := insecureTLSPeers()[p.Name]
+	return ok
+}
+
 // ErrPeerNotFound is returned when the named peer is not in this
 // agent's topology — either because it does not exist in the AgentSet
 // or because the routing pattern forbids this agent from reaching it.
@@ -87,7 +125,8 @@ func Peers() ([]string, error) {
 
 // ResolveAgentCard fetches the AgentCard of the named peer from its
 // well-known location. The peer URL is looked up in the topology. For
-// Managed peers, TLS verification is skipped on the card fetch.
+// Managed peers, and External peers named in InsecureTLSPeersEnv, TLS
+// verification is skipped on the card fetch.
 func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.ResolveOption) (*a2a.AgentCard, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
@@ -97,7 +136,7 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 		return nil, fmt.Errorf("kynomesh: peer %q has no URL in topology", name)
 	}
 	resolver := agentcard.DefaultResolver
-	if p.isManaged() {
+	if skipsTLSVerify(p) {
 		resolver = managedCardResolver
 	}
 	card, err := resolver.Resolve(ctx, p.URL, opts...)
@@ -114,14 +153,16 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 // card advertises.
 //
 // Unexported: this always builds a fresh client (a full AgentCard
-// resolve + construction).
+// resolve + construction). For Managed peers, and External peers named
+// in InsecureTLSPeersEnv, TLS verification is skipped on the card fetch
+// and the client transports, unless opts override them.
 func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
 	p, err := lookupPeer(name)
 	if err != nil {
 		return nil, nil, err
 	}
 	resolver := agentcard.DefaultResolver
-	if p.isManaged() {
+	if skipsTLSVerify(p) {
 		resolver = managedCardResolver
 	}
 	card, err := resolver.Resolve(ctx, p.URL)
@@ -129,7 +170,11 @@ func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 		return nil, nil, fmt.Errorf("resolve agent card for %q at %s: %w", name, p.URL, err)
 	}
 
-	if p.isManaged() {
+	if skipsTLSVerify(p) {
+		if !p.isManaged() {
+			slog.Warn("kynomesh: TLS verification disabled for external peer",
+				"peer", name, "env", InsecureTLSPeersEnv)
+		}
 		// Prepend so user-supplied options override the defaults —
 		// FactoryOption.apply writes into a per-protocol map, so the
 		// last call for a given protocol wins.
