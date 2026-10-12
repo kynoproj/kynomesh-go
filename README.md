@@ -283,6 +283,7 @@ func main() {
     // when the gRPC transport is used, PeerClient registers a gRPC
     // transport that uses TLS for encryption but skips certificate
     // verification. Pass a2agrpc.WithGRPCTransport(...) to override.
+    // See "External peers and TLS" below.
     c, err := client.PeerClient(ctx, "worker-a")
     if err != nil {
         log.Fatalf("create client: %v", err)
@@ -306,7 +307,36 @@ next call (e.g. after the peer's AgentCard changes):
 client.ForgetPeer("worker-a")
 ```
 
-Lower-level helpers when you don't want the full client:
+### External peers and TLS
+
+Peers in the same `AgentSet` (Managed) are reached over the broker's self-signed
+TLS certificate, so the SDK skips certificate verification for them (the hop is
+encrypted, the peer is not authenticated). External peers, declared in
+`externalAgents` (see the
+[core concepts](https://github.com/kynoproj/kynomesh/blob/main/docs/core-concepts/overview.md)),
+are expected to present a real, CA-verifiable certificate, so the SDK verifies
+them normally.
+
+The exception is an External peer that is itself an agent in **another
+AgentSet**. Its broker presents a self-signed certificate too, so verification
+fails with an `x509` error. Name such peers in `KYNOMESH_INSECURE_TLS_PEERS` to
+give them the same treatment as Managed peers:
+
+```yaml
+env:
+  - name: KYNOMESH_INSECURE_TLS_PEERS
+    value: calculator # comma-separated peer names
+```
+
+Nothing changes in your code: `client.PeerClient(ctx, "calculator")` works the
+same. The setting only applies to the named External peers and logs a warning
+when it takes effect. It is read each time a peer's client is built, and clients
+are cached, so after changing it call `client.ForgetPeer("calculator")` to
+rebuild. Leave it unset for a real external agent with a CA-signed certificate.
+
+### Lower-level helpers
+
+Use these when you don't want the full client:
 
 ```go
 url, err := client.PeerURL("worker-a")                // just the URL
