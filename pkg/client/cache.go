@@ -56,9 +56,8 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 // PeerClientWithCardHeaders is PeerClient for a peer that protects its
 // AgentCard, such as one needing {"Authorization": "Bearer ..."} to read it. The
 // headers are sent on the AgentCard request only. They are not attached to calls
-// made through the client: the client is cached, so a credential fixed at build
-// time would go stale. Authenticate calls separately, with
-// a2aclient.AttachServiceParams on each call's context or an interceptor passed
+// made through the client. If headers are needed for each client call, do it with
+// a2aclient.AttachServiceParams on its context or an interceptor passed
 // via a2aclient.WithCallInterceptors.
 //
 // Like opts, headers are only applied the first time the peer's client is
