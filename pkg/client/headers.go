@@ -17,14 +17,9 @@ limitations under the License.
 package client
 
 import (
-	"context"
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
-
-	"github.com/a2aproject/a2a-go/v2/a2a"
-	"github.com/a2aproject/a2a-go/v2/a2aclient"
 )
 
 var (
@@ -59,70 +54,4 @@ func validateHeaders(headers map[string]string) (map[string]string, error) {
 		checked[name] = value
 	}
 	return checked, nil
-}
-
-// headerInterceptor adds fixed headers to every call, unless the call already
-// sets them, so a per-call header (via a2aclient.AttachServiceParams) wins.
-type headerInterceptor struct {
-	a2aclient.PassthroughInterceptor
-	headers map[string]string
-}
-
-func newHeaderInterceptor(headers map[string]string) *headerInterceptor {
-	return &headerInterceptor{headers: headers}
-}
-
-// Before implements a2aclient.CallInterceptor.
-func (h *headerInterceptor) Before(ctx context.Context, req *a2aclient.Request) (context.Context, any, error) {
-	if req.ServiceParams == nil {
-		req.ServiceParams = a2aclient.ServiceParams{}
-	}
-	for name, value := range h.headers {
-		if !hasParam(req.ServiceParams, name) {
-			req.ServiceParams.Append(name, value)
-		}
-	}
-	return ctx, nil, nil
-}
-
-// hasParam reports whether params already holds name, ignoring case. It scans the
-// keys because ServiceParams.Get only matches lower-case keys, and the a2a SDK
-// itself writes some mixed-case ones (for example "Authorization").
-func hasParam(params a2aclient.ServiceParams, name string) bool {
-	for key, values := range params {
-		if strings.EqualFold(key, name) && len(values) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// hostOf returns the lower-cased host of rawURL, which may be host:port
-// without a scheme.
-func hostOf(rawURL string) string {
-	if !strings.Contains(rawURL, "://") {
-		rawURL = "//" + rawURL
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(u.Hostname())
-}
-
-// ensureCardStaysOnPeerHost returns an error if card advertises an interface on
-// a different host than peerURL.
-//
-// The card is peer-controlled content. Without this check a misconfigured or
-// tampered card could redirect calls, and the headers with them, to a host the
-// caller never configured.
-func ensureCardStaysOnPeerHost(card *a2a.AgentCard, peerURL, peerName string) error {
-	expected := hostOf(peerURL)
-	for _, iface := range card.SupportedInterfaces {
-		if host := hostOf(iface.URL); host != expected {
-			return fmt.Errorf("kynomesh: the card of peer %q advertises an interface on host %q, not %q; refusing to send headers to it",
-				peerName, host, expected)
-		}
-	}
-	return nil
 }

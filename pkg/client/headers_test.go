@@ -147,59 +147,27 @@ func TestValidateHeadersRejectsMalformedEntries(t *testing.T) {
 	}
 }
 
-func TestHeaderInterceptorAddsHeaders(t *testing.T) {
-	req := &a2aclient.Request{ServiceParams: a2aclient.ServiceParams{}}
-
-	if _, _, err := newHeaderInterceptor(testAuth).Before(context.Background(), req); err != nil {
-		t.Fatalf("Before: %v", err)
-	}
-
-	if got := req.ServiceParams.Get("authorization"); len(got) != 1 || got[0] != testToken {
-		t.Errorf("Authorization = %v, want [%s]", got, testToken)
-	}
-}
-
-func TestHeaderInterceptorToleratesNilServiceParams(t *testing.T) {
-	req := &a2aclient.Request{}
-
-	if _, _, err := newHeaderInterceptor(testAuth).Before(context.Background(), req); err != nil {
-		t.Fatalf("Before: %v", err)
-	}
-
-	if got := req.ServiceParams.Get("Authorization"); len(got) != 1 {
-		t.Errorf("Authorization = %v, want one value", got)
-	}
-}
-
-func TestHeaderInterceptorPerCallHeadersWin(t *testing.T) {
-	req := &a2aclient.Request{ServiceParams: a2aclient.ServiceParams{}}
-	req.ServiceParams.Append("AUTHORIZATION", "Bearer fresh")
-
-	if _, _, err := newHeaderInterceptor(testAuth).Before(context.Background(), req); err != nil {
-		t.Fatalf("Before: %v", err)
-	}
-
-	got := req.ServiceParams.Get("Authorization")
-	if len(got) != 1 || got[0] != "Bearer fresh" {
-		t.Errorf("Authorization = %v, want only the per-call value", got)
-	}
-}
-
 func TestNewForPeerHeadersAuthenticatesTheCardFetchAndEveryCall(t *testing.T) {
 	agent := newProtectedAgent(t, testToken)
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	c, _, err := newForPeerHeaders(context.Background(), "calc", testAuth)
+	c, _, err := newForPeerCardHeaders(context.Background(), "calc", testAuth)
 	if err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
+		t.Fatalf("newForPeerCardHeaders: %v", err)
 	}
 	sendPing(t, c, context.Background())
 
 	if got := agent.cards(); len(got) != 1 || got[0] != testToken {
 		t.Errorf("card auth = %v, want [%s]", got, testToken)
 	}
-	if got := agent.calls(); len(got) == 0 || got[0] != testToken {
-		t.Errorf("call auth = %v, want %s", got, testToken)
+	got := agent.calls()
+	if len(got) == 0 {
+		t.Fatal("the call never reached the peer")
+	}
+	for _, auth := range got {
+		if auth != "" {
+			t.Errorf("call auth = %q, want none: card headers must not reach calls", auth)
+		}
 	}
 }
 
@@ -212,12 +180,12 @@ func TestNewForPeerWithoutHeadersCannotReadAProtectedCard(t *testing.T) {
 	}
 }
 
-func TestPerCallHeadersOverrideTheClientHeaders(t *testing.T) {
+func TestPerCallHeadersAuthenticateCalls(t *testing.T) {
 	agent := newProtectedAgent(t, testToken)
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-	c, _, err := newForPeerHeaders(context.Background(), "calc", testAuth)
+	c, _, err := newForPeerCardHeaders(context.Background(), "calc", testAuth)
 	if err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
+		t.Fatalf("newForPeerCardHeaders: %v", err)
 	}
 
 	ctx := a2aclient.AttachServiceParams(context.Background(), a2aclient.ServiceParams{"Authorization": {"Bearer fresh"}})
@@ -232,52 +200,13 @@ func TestMalformedHeadersFailBeforeAnyRequest(t *testing.T) {
 	agent := newProtectedAgent(t, "")
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	_, _, err := newForPeerHeaders(context.Background(), "calc", map[string]string{"Authorization": "a\nb"})
+	_, _, err := newForPeerCardHeaders(context.Background(), "calc", map[string]string{"Authorization": "a\nb"})
 
 	if err == nil {
 		t.Fatal("expected an error")
 	}
 	if n := len(agent.cards()); n != 0 {
 		t.Errorf("%d card requests were made, want none", n)
-	}
-}
-
-func TestHeadersAreRefusedWhenTheCardAdvertisesAnotherHost(t *testing.T) {
-	agent := newProtectedAgent(t, "", "https://attacker.example/a2a")
-	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-
-	c, _, err := newForPeerHeaders(context.Background(), "calc", testAuth)
-
-	if err == nil {
-		t.Fatal("expected the card's other host to be refused")
-	}
-	if c != nil {
-		t.Error("a client was returned")
-	}
-	if !strings.Contains(err.Error(), "attacker.example") {
-		t.Errorf("error does not name the host: %v", err)
-	}
-	if strings.Contains(err.Error(), "secret") {
-		t.Errorf("error echoes a header value: %v", err)
-	}
-}
-
-func TestHeadersAreAcceptedWhenEveryInterfaceIsOnThePeerHost(t *testing.T) {
-	// Same host with a different scheme and port, and a scheme-less gRPC address.
-	agent := newProtectedAgent(t, "", "http://127.0.0.1:9999/a2a", "127.0.0.1:8089")
-	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-
-	if _, _, err := newForPeerHeaders(context.Background(), "calc", testAuth); err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
-	}
-}
-
-func TestOtherHostsAreFineWhenNoHeadersAreSent(t *testing.T) {
-	agent := newProtectedAgent(t, "", "https://elsewhere.example/a2a")
-	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-
-	if _, _, err := newForPeer(context.Background(), "calc"); err != nil {
-		t.Fatalf("newForPeer: %v", err)
 	}
 }
 
@@ -290,8 +219,8 @@ func TestWarnsWhenHeadersGoToAPeerWithoutTLSVerification(t *testing.T) {
 	agent := newProtectedAgent(t, "")
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	if _, _, err := newForPeerHeaders(context.Background(), "calc", testAuth); err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
+	if _, _, err := newForPeerCardHeaders(context.Background(), "calc", testAuth); err != nil {
+		t.Fatalf("newForPeerCardHeaders: %v", err)
 	}
 
 	if !strings.Contains(buf.String(), "without TLS verification") || !strings.Contains(buf.String(), "calc") {
@@ -310,8 +239,8 @@ func TestNoTLSWarningWhenThePeerIsVerified(t *testing.T) {
 	agent := newProtectedAgent(t, "")
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	if _, _, err := newForPeerHeaders(context.Background(), "calc", testAuth); err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
+	if _, _, err := newForPeerCardHeaders(context.Background(), "calc", testAuth); err != nil {
+		t.Fatalf("newForPeerCardHeaders: %v", err)
 	}
 
 	if strings.Contains(buf.String(), "without TLS verification") {
@@ -319,18 +248,18 @@ func TestNoTLSWarningWhenThePeerIsVerified(t *testing.T) {
 	}
 }
 
-func TestPeerClientWithHeadersAppliesOnFirstBuildOnly(t *testing.T) {
+func TestPeerClientWithCardHeadersAppliesOnFirstBuildOnly(t *testing.T) {
 	resetCacheBetweenTests(t)
 	agent := newProtectedAgent(t, testToken)
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	first, err := PeerClientWithHeaders(context.Background(), "calc", testAuth)
+	first, err := PeerClientWithCardHeaders(context.Background(), "calc", testAuth)
 	if err != nil {
-		t.Fatalf("first PeerClientWithHeaders: %v", err)
+		t.Fatalf("first PeerClientWithCardHeaders: %v", err)
 	}
-	second, err := PeerClientWithHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer other"})
+	second, err := PeerClientWithCardHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer other"})
 	if err != nil {
-		t.Fatalf("second PeerClientWithHeaders: %v", err)
+		t.Fatalf("second PeerClientWithCardHeaders: %v", err)
 	}
 
 	if first != second {
@@ -341,8 +270,8 @@ func TestPeerClientWithHeadersAppliesOnFirstBuildOnly(t *testing.T) {
 	}
 
 	sendPing(t, second, context.Background())
-	if got := agent.calls(); len(got) == 0 || got[0] != testToken {
-		t.Errorf("call auth = %v, want the first build's %s", got, testToken)
+	if got := agent.cards(); got[0] != testToken {
+		t.Errorf("card auth = %v, want the first build's %s", got, testToken)
 	}
 }
 
@@ -350,13 +279,13 @@ func TestForgetPeerLetsNewHeadersTakeEffect(t *testing.T) {
 	resetCacheBetweenTests(t)
 	agent := newProtectedAgent(t, "")
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-	if _, err := PeerClientWithHeaders(context.Background(), "calc", testAuth); err != nil {
-		t.Fatalf("PeerClientWithHeaders: %v", err)
+	if _, err := PeerClientWithCardHeaders(context.Background(), "calc", testAuth); err != nil {
+		t.Fatalf("PeerClientWithCardHeaders: %v", err)
 	}
 
 	ForgetPeer("calc")
-	if _, err := PeerClientWithHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer other"}); err != nil {
-		t.Fatalf("PeerClientWithHeaders after forget: %v", err)
+	if _, err := PeerClientWithCardHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer other"}); err != nil {
+		t.Fatalf("PeerClientWithCardHeaders after forget: %v", err)
 	}
 
 	got := agent.cards()
@@ -370,10 +299,10 @@ func TestFailedBuildWithHeadersIsNotCached(t *testing.T) {
 	agent := newProtectedAgent(t, testToken)
 	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
 
-	if _, err := PeerClientWithHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer wrong"}); err == nil {
+	if _, err := PeerClientWithCardHeaders(context.Background(), "calc", map[string]string{"Authorization": "Bearer wrong"}); err == nil {
 		t.Fatal("expected the wrong token to be refused")
 	}
-	if _, err := PeerClientWithHeaders(context.Background(), "calc", testAuth); err != nil {
+	if _, err := PeerClientWithCardHeaders(context.Background(), "calc", testAuth); err != nil {
 		t.Fatalf("retry with the right token: %v", err)
 	}
 }
@@ -388,25 +317,6 @@ func TestResolveAgentCardAcceptsRequestHeaders(t *testing.T) {
 	}
 	if card.Name != "calc" {
 		t.Errorf("card.Name = %q, want calc", card.Name)
-	}
-}
-
-func TestHeaderInterceptorPerCallHeadersWinOverMixedCaseKeysWrittenBySDK(t *testing.T) {
-	// a2aclient's own auth interceptor assigns a mixed-case key directly.
-	req := &a2aclient.Request{ServiceParams: a2aclient.ServiceParams{"Authorization": {"Bearer session"}}}
-
-	if _, _, err := newHeaderInterceptor(testAuth).Before(context.Background(), req); err != nil {
-		t.Fatalf("Before: %v", err)
-	}
-
-	total := 0
-	for key, values := range req.ServiceParams {
-		if strings.EqualFold(key, "Authorization") {
-			total += len(values)
-		}
-	}
-	if total != 1 {
-		t.Errorf("%d Authorization values, want only the existing one: %v", total, req.ServiceParams)
 	}
 }
 
@@ -437,39 +347,11 @@ func TestHeadersAreNotSentToARedirectOnTheCardFetch(t *testing.T) {
 	t.Cleanup(peer.Close)
 	writeTopologyWithKind(t, "calc", "External", peer.URL)
 
-	c, _, err := newForPeerHeaders(context.Background(), "calc", testAuth)
+	c, _, err := newForPeerCardHeaders(context.Background(), "calc", testAuth)
 
 	if err == nil || c != nil {
 		t.Fatalf("expected the redirected card fetch to fail, got client %v, err %v", c, err)
 	}
-	if got := received(); len(got) != 0 {
-		t.Errorf("the redirect target received %v, want no request", got)
-	}
-}
-
-func TestHeadersAreNotSentToARedirectOnCalls(t *testing.T) {
-	target, received := redirectTarget(t)
-	agent := newProtectedAgent(t, "")
-	// Calls (POST /) are redirected; the card is served normally.
-	agent.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == a2asrv.WellKnownAgentCardPath {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(&a2a.AgentCard{
-				Name: "calc", Version: "0.0.1",
-				SupportedInterfaces: []*a2a.AgentInterface{a2a.NewAgentInterface(agent.srv.URL, a2a.TransportProtocolJSONRPC)},
-			})
-			return
-		}
-		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
-	})
-	writeTopologyWithKind(t, "calc", "External", agent.srv.URL)
-	c, _, err := newForPeerHeaders(context.Background(), "calc", testAuth)
-	if err != nil {
-		t.Fatalf("newForPeerHeaders: %v", err)
-	}
-
-	sendPing(t, c, context.Background())
-
 	if got := received(); len(got) != 0 {
 		t.Errorf("the redirect target received %v, want no request", got)
 	}

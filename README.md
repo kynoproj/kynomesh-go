@@ -334,52 +334,48 @@ when it takes effect. It is read each time a peer's client is built, and clients
 are cached, so after changing it call `client.ForgetPeer("calculator")` to
 rebuild. Leave it unset for a real external agent with a CA-signed certificate.
 
-### Peers that require auth
+### Peers that protect their AgentCard
 
-An external peer often wants to know who is calling, for example with an
-`Authorization` header or an API key, and may protect its AgentCard the same way.
-Use `PeerClientWithHeaders`. The headers are sent on the AgentCard request and
-attached to every call made through the client:
+Some peers require a header, such as an `Authorization` header or an API key,
+just to read their AgentCard. Use `PeerClientWithCardHeaders`. The headers are
+sent on the AgentCard request only:
 
 ```go
-c, err := client.PeerClientWithHeaders(ctx, "fraud-check", map[string]string{
+c, err := client.PeerClientWithCardHeaders(ctx, "fraud-check", map[string]string{
     "Authorization": "Bearer " + os.Getenv("FRAUD_CHECK_TOKEN"),
 })
 ```
 
+They are **not** attached to calls made through the client. The client is cached
+for the life of the process, so a credential fixed at build time would go stale,
+and discovery and calls often use different credentials. Authenticate each call
+yourself:
+
+```go
+ctx = a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
+    "Authorization": {"Bearer " + freshToken},
+})
+resp, err := c.SendMessage(ctx, req)
+```
+
+For the same credential on every call, pass an interceptor when building the
+client with `a2aclient.WithCallInterceptors(...)`.
+
 - Headers are applied when the client is first built. Clients are cached, so
   headers passed on later calls are ignored. After a token changes, call
-  `client.ForgetPeer("fraud-check")` and then `PeerClientWithHeaders` again.
-- A header set on an individual call wins over one given to
-  `PeerClientWithHeaders`, so you can still refresh a token per request:
-
-  ```go
-  ctx = a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
-      "Authorization": {"Bearer " + freshToken},
-  })
-  resp, err := c.SendMessage(ctx, req)
-  ```
-
-- Attach headers only for the peer that needs them: they go to whichever peer the
-  client talks to. Read secrets from the environment (for example a Kubernetes
-  Secret) rather than hard-coding them.
-- **Headers only go to the peer you configured.** The AgentCard is content the
-  peer controls, so if it advertises an interface on a different host than the
-  peer's address, the call fails instead of sending your headers there.
+  `client.ForgetPeer("fraud-check")` and then `PeerClientWithCardHeaders` again.
+- **Redirects are not followed** on the card request, so the headers are never
+  re-sent to another host.
 - **Mind TLS verification.** For a peer whose certificate is not verified (a
   Managed peer, or one named in `KYNOMESH_INSECURE_TLS_PEERS`) the SDK logs a
   warning, because the headers can be read by anyone on the network path. Prefer
   a CA-signed certificate for a peer that needs credentials.
-- **Redirects are not followed**, so the headers are never re-sent to another
-  host.
-- **Not for per-user tokens.** Because the client is cached and headers apply only
-  on first build, every caller shares the first caller's headers. For a token that
-  differs per request or per user, pass it per call with
-  `a2aclient.AttachServiceParams` instead.
+- Read secrets from the environment (for example a Kubernetes Secret) rather
+  than hard-coding them.
 - Malformed headers fail before any request is made: a name with anything other
-  than letters, digits, `-`, `_` and `.` (or starting with `grpc-`), a value that
-  is not printable ASCII (including line breaks), or the same name given twice in
-  different cases. The error never includes the value.
+  than letters, digits, `-`, `_` and `.` (or starting with `grpc-`), a value
+  that is not printable ASCII (including line breaks), or the same name given
+  twice in different cases. The error never includes the value.
 - To fetch a card on its own, `client.ResolveAgentCard` already accepts
   `agentcard.WithRequestHeader(name, value)`.
 

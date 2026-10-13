@@ -25,8 +25,8 @@ limitations under the License.
 //	card, err := client.ResolveAgentCard(ctx, "worker-a")
 //	c, err := client.PeerClient(ctx, "worker-a")  // ready-to-use a2a client, cached per-process per peer name
 //
-// A peer that requires auth headers, on the AgentCard fetch as well as on calls, uses
-// PeerClientWithHeaders instead.
+// A peer that protects its AgentCard with headers uses PeerClientWithCardHeaders
+// instead; the headers are not sent on calls.
 package client
 
 import (
@@ -173,15 +173,14 @@ func ResolveAgentCard(ctx context.Context, name string, opts ...agentcard.Resolv
 // in InsecureTLSPeersEnv, TLS verification is skipped on the card fetch
 // and the client transports, unless opts override them.
 func newForPeer(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
-	return newForPeerHeaders(ctx, name, nil, opts...)
+	return newForPeerCardHeaders(ctx, name, nil, opts...)
 }
 
-// newForPeerHeaders is newForPeer for a peer that requires headers (such as
-// an Authorization header). The headers are sent on the AgentCard fetch and
-// attached to every call made through the returned client; a header set on an
-// individual call wins. They are refused if the card advertises an interface
-// on a different host than the peer's address.
-func newForPeerHeaders(ctx context.Context, name string, headers map[string]string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
+// newForPeerCardHeaders is newForPeer for a peer that requires headers (such as
+// an Authorization header) to read its AgentCard. The headers are sent on the
+// AgentCard fetch only, never on calls made through the returned client, and
+// redirects are not followed so they cannot be re-sent to another host.
+func newForPeerCardHeaders(ctx context.Context, name string, headers map[string]string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, *a2a.AgentCard, error) {
 	headers, err := validateHeaders(headers)
 	if err != nil {
 		return nil, nil, err
@@ -197,16 +196,10 @@ func newForPeerHeaders(ctx context.Context, name string, headers map[string]stri
 	if len(headers) > 0 {
 		// Never follow a redirect with the headers: Go re-sends custom headers to
 		// the redirect target, which could be another host.
-		httpClient := noRedirectClient(skipsTLSVerify(p))
-		resolver = &agentcard.Resolver{Client: httpClient, CardParser: agentcard.DefaultCardParser}
-		// Prepended so a caller's own transport options still win.
-		opts = append([]a2aclient.FactoryOption{
-			a2aclient.WithRESTTransport(httpClient),
-			a2aclient.WithJSONRPCTransport(httpClient),
-		}, opts...)
+		resolver = &agentcard.Resolver{Client: noRedirectClient(skipsTLSVerify(p)), CardParser: agentcard.DefaultCardParser}
 	}
 	if len(headers) > 0 && skipsTLSVerify(p) {
-		slog.Warn("kynomesh: sending headers to peer without TLS verification; they can be read by anyone on the network path",
+		slog.Warn("kynomesh: sending card headers to peer without TLS verification; they can be read by anyone on the network path",
 			"peer", name)
 	}
 	resolveOpts := make([]agentcard.ResolveOption, 0, len(headers))
@@ -216,12 +209,6 @@ func newForPeerHeaders(ctx context.Context, name string, headers map[string]stri
 	card, err := resolver.Resolve(ctx, p.URL, resolveOpts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve agent card for %q at %s: %w", name, p.URL, err)
-	}
-	if len(headers) > 0 {
-		if err := ensureCardStaysOnPeerHost(card, p.URL, name); err != nil {
-			return nil, nil, err
-		}
-		opts = append(opts[:len(opts):len(opts)], a2aclient.WithCallInterceptors(newHeaderInterceptor(headers)))
 	}
 
 	if skipsTLSVerify(p) {

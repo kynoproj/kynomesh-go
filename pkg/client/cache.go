@@ -50,26 +50,27 @@ var (
 // opts are only applied the first time the peer's client is built; they
 // are ignored on cache hits.
 func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
-	return PeerClientWithHeaders(ctx, name, nil, opts...)
+	return PeerClientWithCardHeaders(ctx, name, nil, opts...)
 }
 
-// PeerClientWithHeaders is PeerClient for a peer that requires headers, such as
-// {"Authorization": "Bearer ..."}. The headers are sent on the AgentCard request
-// and attached to every call made through the client, so a peer that protects
-// its card as well as its calls works. A header set on an individual call, with
-// a2aclient.AttachServiceParams, wins over one given here.
+// PeerClientWithCardHeaders is PeerClient for a peer that protects its
+// AgentCard, such as one needing {"Authorization": "Bearer ..."} to read it. The
+// headers are sent on the AgentCard request only. They are not attached to calls
+// made through the client: the client is cached, so a credential fixed at build
+// time would go stale. Authenticate calls separately, with
+// a2aclient.AttachServiceParams on each call's context or an interceptor passed
+// via a2aclient.WithCallInterceptors.
 //
 // Like opts, headers are only applied the first time the peer's client is
 // built; once it is cached they are ignored. Call ForgetPeer first to rebuild
 // with new ones.
 //
-// The headers go only to the peer you configured: if its AgentCard advertises
-// an interface on a different host than the peer's address, the call fails
-// instead of sending them there, and redirects are never followed. Malformed
-// headers (a name with anything other than letters, digits, '-', '_' and '.', or
-// starting with "grpc-"; a value that is not printable ASCII; or the same name in
-// two cases) also fail, before any request is made, without echoing the value.
-func PeerClientWithHeaders(ctx context.Context, name string, headers map[string]string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
+// Redirects are never followed on the card request, so the headers cannot be
+// re-sent to another host. Malformed headers (a name with anything other than
+// letters, digits, '-', '_' and '.', or starting with "grpc-"; a value that is
+// not printable ASCII; or the same name in two cases) fail before any request is
+// made, without echoing the value.
+func PeerClientWithCardHeaders(ctx context.Context, name string, headers map[string]string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
 	peerClientsMu.Lock()
 	entry, ok := peerClients[name]
 	if !ok {
@@ -80,7 +81,7 @@ func PeerClientWithHeaders(ctx context.Context, name string, headers map[string]
 
 	entry.once.Do(func() {
 		var card *a2a.AgentCard
-		entry.client, card, entry.err = newForPeerHeaders(ctx, name, headers, opts...)
+		entry.client, card, entry.err = newForPeerCardHeaders(ctx, name, headers, opts...)
 		if entry.err == nil {
 			// Best-effort: a failure to record the hash must not fail
 			// the build the caller actually asked for.
