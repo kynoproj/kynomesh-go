@@ -346,10 +346,8 @@ c, err := client.PeerClientWithCardHeaders(ctx, "fraud-check", map[string]string
 })
 ```
 
-They are **not** attached to calls made through the client. The client is cached
-for the life of the process, so a credential fixed at build time would go stale,
-and discovery and calls often use different credentials. Authenticate each call
-yourself:
+They are **not** attached to calls made through the client. Authenticate each
+call yourself:
 
 ```go
 ctx = a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
@@ -366,17 +364,11 @@ client with `a2aclient.WithCallInterceptors(...)`.
   `client.ForgetPeer("fraud-check")` and then `PeerClientWithCardHeaders` again.
 - **Redirects are not followed** on the card request, so the headers are never
   re-sent to another host.
-- **Mind TLS verification.** For a peer whose certificate is not verified (a
-  Managed peer, or one named in `KYNOMESH_INSECURE_TLS_PEERS`) the SDK logs a
-  warning, because the headers can be read by anyone on the network path. Prefer
-  a CA-signed certificate for a peer that needs credentials.
-- Read secrets from the environment (for example a Kubernetes Secret) rather
-  than hard-coding them.
 - Malformed headers fail before any request is made: a name with anything other
   than letters, digits, `-`, `_` and `.` (or starting with `grpc-`), a value
   that is not printable ASCII (including line breaks), or the same name given
   twice in different cases. The error never includes the value.
-- To fetch a card on its own, `client.ResolveAgentCard` already accepts
+- To fetch a card on its own, use `client.ResolveAgentCard` which accepts
   `agentcard.WithRequestHeader(name, value)`.
 
 ### Lower-level helpers
