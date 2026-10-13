@@ -50,6 +50,26 @@ var (
 // opts are only applied the first time the peer's client is built; they
 // are ignored on cache hits.
 func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
+	return PeerClientWithCardHeaders(ctx, name, nil, opts...)
+}
+
+// PeerClientWithCardHeaders is PeerClient for a peer that protects its
+// AgentCard, such as one needing {"Authorization": "Bearer ..."} to read it. The
+// headers are sent on the AgentCard request only. They are not attached to calls
+// made through the client. If headers are needed for each client call, do it with
+// a2aclient.AttachServiceParams on its context or an interceptor passed
+// via a2aclient.WithCallInterceptors.
+//
+// Like opts, headers are only applied the first time the peer's client is
+// built; once it is cached they are ignored. Call ForgetPeer first to rebuild
+// with new ones.
+//
+// Redirects are never followed on the card request, so the headers cannot be
+// re-sent to another host. Malformed headers (a name with anything other than
+// letters, digits, '-', '_' and '.', or starting with "grpc-"; a value that is
+// not printable ASCII; or the same name in two cases) fail before any request is
+// made, without echoing the value.
+func PeerClientWithCardHeaders(ctx context.Context, name string, headers map[string]string, opts ...a2aclient.FactoryOption) (*a2aclient.Client, error) {
 	peerClientsMu.Lock()
 	entry, ok := peerClients[name]
 	if !ok {
@@ -60,7 +80,7 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 
 	entry.once.Do(func() {
 		var card *a2a.AgentCard
-		entry.client, card, entry.err = newForPeer(ctx, name, opts...)
+		entry.client, card, entry.err = newForPeerCardHeaders(ctx, name, headers, opts...)
 		if entry.err == nil {
 			// Best-effort: a failure to record the hash must not fail
 			// the build the caller actually asked for.
@@ -72,9 +92,19 @@ func PeerClient(ctx context.Context, name string, opts ...a2aclient.FactoryOptio
 		// permanently poison the cache for this peer name — evict so
 		// the next call gets a fresh attempt instead of the same error
 		// forever.
-		ForgetPeer(name)
+		forgetEntry(name, entry)
 	}
 	return entry.client, entry.err
+}
+
+// forgetEntry drops the cached entry for name only if it is still entry. A
+// failed build must not evict a newer entry another caller has since built.
+func forgetEntry(name string, entry *clientCacheEntry) {
+	peerClientsMu.Lock()
+	defer peerClientsMu.Unlock()
+	if peerClients[name] == entry {
+		delete(peerClients, name)
+	}
 }
 
 // ForgetPeer drops the cached client for the named peer, if any. The

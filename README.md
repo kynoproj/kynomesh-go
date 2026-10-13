@@ -334,6 +334,43 @@ when it takes effect. It is read each time a peer's client is built, and clients
 are cached, so after changing it call `client.ForgetPeer("calculator")` to
 rebuild. Leave it unset for a real external agent with a CA-signed certificate.
 
+### Peers that protect their AgentCard
+
+Some peers require a header, such as an `Authorization` header or an API key,
+just to read their AgentCard. Use `PeerClientWithCardHeaders`. The headers are
+sent on the AgentCard request only:
+
+```go
+c, err := client.PeerClientWithCardHeaders(ctx, "fraud-check", map[string]string{
+    "Authorization": "Bearer " + os.Getenv("FRAUD_CHECK_TOKEN"),
+})
+```
+
+They are **not** attached to calls made through the client. Authenticate each
+call yourself:
+
+```go
+ctx = a2aclient.AttachServiceParams(ctx, a2aclient.ServiceParams{
+    "Authorization": {"Bearer " + freshToken},
+})
+resp, err := c.SendMessage(ctx, req)
+```
+
+For the same credential on every call, pass an interceptor when building the
+client with `a2aclient.WithCallInterceptors(...)`.
+
+- Headers are applied when the client is first built. Clients are cached, so
+  headers passed on later calls are ignored. After a token changes, call
+  `client.ForgetPeer("fraud-check")` and then `PeerClientWithCardHeaders` again.
+- **Redirects are not followed** on the card request, so the headers are never
+  re-sent to another host.
+- Malformed headers fail before any request is made: a name with anything other
+  than letters, digits, `-`, `_` and `.` (or starting with `grpc-`), a value
+  that is not printable ASCII (including line breaks), or the same name given
+  twice in different cases. The error never includes the value.
+- To fetch a card on its own, use `client.ResolveAgentCard` which accepts
+  `agentcard.WithRequestHeader(name, value)`.
+
 ### Lower-level helpers
 
 Use these when you don't want the full client:
