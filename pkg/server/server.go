@@ -156,7 +156,7 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 	case err := <-serveErr:
 		_ = httpSrv.Close()
 		st.grpcServer.Stop()
-		<-serveErr
+		drain(serveErr, 1)
 		return err
 	}
 
@@ -169,8 +169,7 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 	defer cancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		st.grpcServer.Stop()
-		<-serveErr
-		<-serveErr
+		drain(serveErr, 2)
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	st.grpcServer.GracefulStop()
@@ -181,4 +180,13 @@ func Start(ctx context.Context, executor a2asrv.AgentExecutor, card *a2a.AgentCa
 		return httpErr
 	}
 	return grpcErr
+}
+
+// drain waits for n serve goroutines to exit, logging any errors.
+func drain(ch <-chan error, n int) {
+	for range n {
+		if err := <-ch; err != nil {
+			slog.Debug("serve goroutine exited with error", "error", err)
+		}
+	}
 }
