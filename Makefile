@@ -11,7 +11,7 @@ test-coverage:
 	go tool cover -func=profile.cov
 
 $(GOPATH)/bin/golangci-lint:
-	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(GOPATH)/bin v2.12.2
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(GOPATH)/bin v2.15.0
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
