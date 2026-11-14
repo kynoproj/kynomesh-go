@@ -1,5 +1,5 @@
-github.com/a2aproject/a2a-go/v2 v2.7.0 h1:rwIpzO5O9Mxu/Rm4S2SZfHYzNcvF3FK9aaaTxP35kAo=
-github.com/a2aproject/a2a-go/v2 v2.7.0/go.mod h1:rvFIb0sBJl2qmJRYU2fQxI6hhIQksmGGMEhT/uRwWww=
+github.com/a2aproject/a2a-go/v2 v2.8.0 h1:RmZBANuY8P9Pm1dfZ8gCY2yHAuVO7OnTFw8/kOZdCQQ=
+github.com/a2aproject/a2a-go/v2 v2.8.0/go.mod h1:UrxIRm1qmHm1kDoEk5PXRHc+4WGw0OEnZFuavMOH+24=
 github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 h1:uX1JmpONuD549D73r6cgnxyUu18Zb7yHAy5AYU0Pm4Q=
 github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467/go.mod h1:uzvlm1mxhHkdfqitSA92i7Se+S9ksOn3a3qmv/kyOCw=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
